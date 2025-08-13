@@ -26,6 +26,7 @@ from io import BytesIO
 from bs4 import BeautifulSoup
 import time
 import random
+import uuid
 
 
 logging.basicConfig(
@@ -44,7 +45,11 @@ def create_chrome_driver(user_agent=None, debug_port=None):
     if debug_port is None:
         debug_port = random.randint(9222, 9999)
     chrome_options.add_argument(f"--remote-debugging-port={debug_port}")
-    temp_dir = tempfile.mkdtemp(prefix="chrome_user_data_")
+    # user-data-dir на Google Диске
+    base_dir = "/content/drive/MyDrive/chrome_user_data"
+    os.makedirs(base_dir, exist_ok=True)
+    temp_dir = os.path.join(base_dir, str(uuid.uuid4()))
+    os.makedirs(temp_dir, exist_ok=True)
     chrome_options.add_argument(f"--user-data-dir={temp_dir}")
     driver = webdriver.Chrome(options=chrome_options)
     driver._temp_dir = temp_dir
@@ -181,9 +186,7 @@ class Processor(metaclass=RuntimeMeta):
         """
         Собирает ссылки на карточки товаров с помощью Selenium, эмулируя клики по пагинации.
         """
-        driver = create_chrome_driver(
-            user_agent=random.choice(self.user_agents)
-        )
+        driver = create_chrome_driver(user_agent=random.choice(self.user_agents))
         driver.execute_cdp_cmd(
             "Page.addScriptToEvaluateOnNewDocument",
             {
@@ -362,9 +365,7 @@ class Processor(metaclass=RuntimeMeta):
             return {"price": "N/A"}
 
     def load_product_info_selenium(self, page_url):
-        driver = create_chrome_driver(
-            user_agent=random.choice(self.user_agents)
-        )
+        driver = create_chrome_driver(user_agent=random.choice(self.user_agents))
         driver.get(page_url)
         time.sleep(2)
         try:
