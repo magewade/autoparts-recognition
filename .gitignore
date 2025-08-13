@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.log
+
+# VSCode
+.vscode/
+.history/
+
+# Jupyter
+.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+# Data & results
+*.xlsx
+*.xls
+*.csv
+*.pkl
+*.hdf5
+*.npz
+*.npy
+*.html
+test_labels.json
+train_labels.json
+
+# Environment
+.venv/
+env/
+venv/
+ENV/
+Pipfile.lock
+poetry.lock
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.key
+*.pem
+
+# Selenium/Chrome
+chromedriver.log
+selenium-screenshot-*.png
+
+# Pytest cache
+.pytest_cache/
+
+# Notebook output
+predicted_data_goofish*.xlsx
+predicted_data_goofish_split.xlsx
