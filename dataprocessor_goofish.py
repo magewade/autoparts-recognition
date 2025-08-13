@@ -35,6 +35,7 @@ logging.basicConfig(
 
 
 def create_chrome_driver(user_agent=None, debug_port=None):
+    time.sleep(2)  # Дать системе время после предыдущего драйвера
     logging.info("Creating new Chrome driver...")
     chrome_options = Options()
     if user_agent:
@@ -52,6 +53,7 @@ def create_chrome_driver(user_agent=None, debug_port=None):
     temp_dir = os.path.join(base_dir, str(uuid.uuid4()))
     os.makedirs(temp_dir, exist_ok=True)
     chrome_options.add_argument(f"--user-data-dir={temp_dir}")
+    logging.info(f"Chrome user-data-dir: {temp_dir}, debug_port: {debug_port}")
     driver = webdriver.Chrome(options=chrome_options)
     driver._temp_dir = temp_dir
     return driver
@@ -66,6 +68,8 @@ def close_chrome_driver(driver):
         pass
     if temp_dir and os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
+    # Дать системе время освободить ресурсы
+    time.sleep(2)
 
 
 def human_sleep(a=1.2, b=3.5):
