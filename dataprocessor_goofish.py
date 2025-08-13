@@ -195,11 +195,10 @@ class Processor(metaclass=RuntimeMeta):
             headers_list.append(headers)
         return headers_list
 
-    def collect_product_links_selenium(self, max_steps=5, max_links=100):
+    def collect_product_links_selenium(self, driver, max_steps=5, max_links=100):
         """
         Собирает ссылки на карточки товаров с помощью Selenium, эмулируя клики по пагинации.
         """
-        driver = create_chrome_driver(user_agent=random.choice(self.user_agents))
         driver.execute_cdp_cmd(
             "Page.addScriptToEvaluateOnNewDocument",
             {
@@ -287,7 +286,6 @@ class Processor(metaclass=RuntimeMeta):
                     href = "https://www.goofish.com" + href
                 collected.append((img_src, href))
                 if len(collected) >= max_links:
-                    close_chrome_driver(driver)
                     return collected
 
             if page == max_steps:
@@ -313,18 +311,12 @@ class Processor(metaclass=RuntimeMeta):
                 print(f"Не удалось перейти на страницу {page+1} по стрелке: {e}")
                 break
 
-        close_chrome_driver(driver)
         return collected
 
-    def parse_big_images_from_slider_selenium(self, page_url):
+    def parse_big_images_from_slider_selenium(self, driver, page_url):
         """
         Собирает все большие картинки из слайдера карточки товара goofish через Selenium.
         """
-        chrome_options = Options()
-        # chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        driver = webdriver.Chrome(options=chrome_options)
         driver.get(page_url)
         time.sleep(3)
 
@@ -354,7 +346,6 @@ class Processor(metaclass=RuntimeMeta):
         except Exception:
             pass
 
-        close_chrome_driver(driver)
         return list(image_links)
 
     def load_product_info(self, page_url):
@@ -377,8 +368,7 @@ class Processor(metaclass=RuntimeMeta):
             logging.warning(f"Could not load product info for {page_url}: {e}")
             return {"price": "N/A"}
 
-    def load_product_info_selenium(self, page_url):
-        driver = create_chrome_driver(user_agent=random.choice(self.user_agents))
+    def load_product_info_selenium(self, driver, page_url):
         driver.get(page_url)
         time.sleep(2)
         try:
@@ -388,8 +378,19 @@ class Processor(metaclass=RuntimeMeta):
             price = price_elem.text.strip()
         except Exception:
             price = "N/A"
-        close_chrome_driver(driver)
         return {"price": price}
+
+    def create_persistent_driver(self, user_agent=None, debug_port=None):
+        """
+        Создает persistent Selenium Chrome driver для всех операций.
+        """
+        if user_agent is None:
+            user_agent = random.choice(self.user_agents)
+        driver = create_chrome_driver(user_agent=user_agent, debug_port=debug_port)
+        return driver
+
+    def close_persistent_driver(self, driver):
+        close_chrome_driver(driver)
 
     def process_encoded_data(self, encoded_data, result):
         """
