@@ -360,11 +360,9 @@ class Processor(metaclass=RuntimeMeta):
             return {"price": "N/A"}
 
     def load_product_info_selenium(self, page_url):
-        chrome_options = Options()
-        # chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        driver = webdriver.Chrome(options=chrome_options)
+        driver = create_chrome_driver(
+            user_agent=random.choice(self.user_agents), debug_port=9223
+        )
         driver.get(page_url)
         time.sleep(2)
         try:
