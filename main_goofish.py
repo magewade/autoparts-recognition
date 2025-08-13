@@ -125,7 +125,6 @@ def parse_args():
     )
 
 
-
 def encode(
     link: str, picker: TargetModel, model: GeminiInference, processor, **kwargs
 ) -> dict:
@@ -133,9 +132,12 @@ def encode(
     max_retries = 3
     base_delay = 5
 
+    driver = kwargs.get("driver")
     for attempt in range(max_retries):
         try:
-            page_img_links = processor.parse_big_images_from_slider_selenium(link)
+            page_img_links = processor.parse_big_images_from_slider_selenium(
+                driver, link
+            )
             page_img_links = list(set(page_img_links))
 
             logging.info(f"Checking {link} for images")
@@ -144,10 +146,10 @@ def encode(
             if not page_img_links:
                 logging.warning(f"No images found for link: {link}")
                 print("DEBUG page_img_links:", page_img_links)
-                print("DEBUG target_image_link:", target_image_link)
+                print("DEBUG target_image_link:", None)
                 print(
                     "DEBUG incorrect_image_links:",
-                    [l for l in page_img_links if l != target_image_link],
+                    [l for l in page_img_links],
                 )
                 return {
                     "predicted_number": "NO_IMAGES",
@@ -201,7 +203,7 @@ def encode(
 
             logging.info(f"Predicted number id: {detail_number}")
 
-            parsed_info = processor.load_product_info_selenium(link)
+            parsed_info = processor.load_product_info_selenium(driver, link)
             return {
                 "predicted_number": detail_number,
                 "url": link,
@@ -256,47 +258,57 @@ def reduce(
     **kwargs,
 ):
     logging.info(f"Starting link collection from {main_link}")
-    all_links = processor.collect_product_links_selenium(
-        max_steps=additional_data["max_steps"], max_links=additional_data["max_links"]
-    )
-    all_links = list(set([l[1] for l in all_links]))  # l[1] — ссылка на карточку
-    logging.info(f"Collected {len(all_links)} unique links")
+    driver = processor.create_persistent_driver()
+    try:
+        all_links = processor.collect_product_links_selenium(
+            driver,
+            max_steps=additional_data["max_steps"],
+            max_links=additional_data["max_links"],
+        )
+        all_links = list(set([l[1] for l in all_links]))  # l[1] — ссылка на карточку
+        logging.info(f"Collected {len(all_links)} unique links")
 
-    result = {
-        "predicted_number": [],
-        "url": [],
-        "price": [],
-        "correct_image_link": [],
-        "incorrect_image_links": [],
-    }
+        result = {
+            "predicted_number": [],
+            "url": [],
+            "price": [],
+            "correct_image_link": [],
+            "incorrect_image_links": [],
+        }
 
-    max_retries = 20
-    base_delay = 5
+        max_retries = 20
+        base_delay = 5
 
-    for i, page_link in enumerate(all_links):
-        for attempt in range(max_retries):
-            try:
-                time.sleep(random.uniform(1, 3))
-                logging.info(f"Processing {i+1}/{len(all_links)} link: {page_link}")
-                encoded_data = encode(page_link, picker, model, processor)
-                processor.process_encoded_data(encoded_data, result)
-                if (i + 1) % 10 == 0:
-                    save_intermediate_results(result, f"{savename}_part_{i // 10 + 1}")
-                logging.info("Processing successful")
-                break
-            except Exception as e:
-                logging.error(f"Unexpected error processing link {page_link}: {e}")
-                encoded_data = {
-                    "predicted_number": "ERROR",
-                    "url": page_link,
-                    "price": "N/A",
-                    "correct_image_link": "N/A",
-                    "incorrect_image_links": ["N/A"],
-                }
-                processor.process_encoded_data(encoded_data, result)
-                break
+        for i, page_link in enumerate(all_links):
+            for attempt in range(max_retries):
+                try:
+                    time.sleep(random.uniform(1, 3))
+                    logging.info(f"Processing {i+1}/{len(all_links)} link: {page_link}")
+                    encoded_data = encode(
+                        page_link, picker, model, processor, driver=driver
+                    )
+                    processor.process_encoded_data(encoded_data, result)
+                    if (i + 1) % 10 == 0:
+                        save_intermediate_results(
+                            result, f"{savename}_part_{i // 10 + 1}"
+                        )
+                    logging.info("Processing successful")
+                    break
+                except Exception as e:
+                    logging.error(f"Unexpected error processing link {page_link}: {e}")
+                    encoded_data = {
+                        "predicted_number": "ERROR",
+                        "url": page_link,
+                        "price": "N/A",
+                        "correct_image_link": "N/A",
+                        "incorrect_image_links": ["N/A"],
+                    }
+                    processor.process_encoded_data(encoded_data, result)
+                    break
 
-    return result
+        return result
+    finally:
+        processor.close_persistent_driver(driver)
 
 
 if __name__ == "__main__":
