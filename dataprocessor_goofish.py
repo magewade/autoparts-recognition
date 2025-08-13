@@ -14,6 +14,10 @@ import time
 import tensorflow as tf
 import numpy as np
 
+import tempfile
+import shutil
+import os
+
 import random
 
 import requests
@@ -23,9 +27,36 @@ from bs4 import BeautifulSoup
 import time
 import random
 
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
+
+def create_chrome_driver(user_agent=None, debug_port=9222):
+    chrome_options = Options()
+    if user_agent:
+        chrome_options.add_argument(f"--user-agent={user_agent}")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument(f"--remote-debugging-port={debug_port}")
+    # создаём уникальную временную директорию
+    temp_dir = tempfile.mkdtemp(prefix="chrome_user_data_")
+    chrome_options.add_argument(f"--user-data-dir={temp_dir}")
+    driver = webdriver.Chrome(options=chrome_options)
+    driver._temp_dir = temp_dir  # сохраним путь для удаления
+    return driver
+
+
+def close_chrome_driver(driver):
+    temp_dir = getattr(driver, "_temp_dir", None)
+    try:
+        driver.quit()
+    except Exception:
+        pass
+    if temp_dir and os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def human_sleep(a=1.2, b=3.5):
@@ -148,16 +179,9 @@ class Processor(metaclass=RuntimeMeta):
         """
         Собирает ссылки на карточки товаров с помощью Selenium, эмулируя клики по пагинации.
         """
-        chrome_options = Options()
-        user_agent = random.choice(self.user_agents)
-        chrome_options.add_argument(f"--user-agent={user_agent}")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option("useAutomationExtension", False)
-        chrome_options.add_argument("--headless")  # Uncomment for headless mode
-
-        driver = webdriver.Chrome(options=chrome_options)
+        driver = create_chrome_driver(
+            user_agent=random.choice(self.user_agents), debug_port=9222
+        )
         driver.execute_cdp_cmd(
             "Page.addScriptToEvaluateOnNewDocument",
             {
@@ -245,7 +269,7 @@ class Processor(metaclass=RuntimeMeta):
                     href = "https://www.goofish.com" + href
                 collected.append((img_src, href))
                 if len(collected) >= max_links:
-                    driver.quit()
+                    close_chrome_driver(driver)
                     return collected
 
             if page == max_steps:
@@ -271,7 +295,7 @@ class Processor(metaclass=RuntimeMeta):
                 print(f"Не удалось перейти на страницу {page+1} по стрелке: {e}")
                 break
 
-        driver.quit()
+        close_chrome_driver(driver)
         return collected
 
     def parse_big_images_from_slider_selenium(self, page_url):
@@ -312,7 +336,7 @@ class Processor(metaclass=RuntimeMeta):
         except Exception:
             pass
 
-        driver.quit()
+        close_chrome_driver(driver)
         return list(image_links)
 
     def load_product_info(self, page_url):
@@ -350,7 +374,7 @@ class Processor(metaclass=RuntimeMeta):
             price = price_elem.text.strip()
         except Exception:
             price = "N/A"
-        driver.quit()
+        close_chrome_driver(driver)
         return {"price": price}
 
     def process_encoded_data(self, encoded_data, result):
