@@ -27,6 +27,7 @@ from bs4 import BeautifulSoup
 import time
 import random
 import uuid
+import subprocess
 
 
 logging.basicConfig(
@@ -35,7 +36,13 @@ logging.basicConfig(
 
 
 def create_chrome_driver(user_agent=None, debug_port=None):
-    time.sleep(2)  # Дать системе время после предыдущего драйвера
+    time.sleep(2)
+    logging.info("Killing all chrome/chromium processes before starting new driver...")
+    try:
+        subprocess.run("pkill -9 chrome", shell=True)
+        subprocess.run("pkill -9 chromium", shell=True)
+    except Exception as e:
+        logging.warning(f"Could not kill chrome processes: {e}")
     logging.info("Creating new Chrome driver...")
     chrome_options = Options()
     if user_agent:
