@@ -35,6 +35,7 @@ logging.basicConfig(
 
 
 def create_chrome_driver(user_agent=None, debug_port=None):
+    logging.info("Creating new Chrome driver...")
     chrome_options = Options()
     if user_agent:
         chrome_options.add_argument(f"--user-agent={user_agent}")
@@ -57,6 +58,7 @@ def create_chrome_driver(user_agent=None, debug_port=None):
 
 
 def close_chrome_driver(driver):
+    logging.info("Closing Chrome driver...")
     temp_dir = getattr(driver, "_temp_dir", None)
     try:
         driver.quit()
