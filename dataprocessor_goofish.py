@@ -155,7 +155,7 @@ class Processor(metaclass=RuntimeMeta):
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option("useAutomationExtension", False)
-        # chrome_options.add_argument("--headless")  # Uncomment for headless mode
+        chrome_options.add_argument("--headless")  # Uncomment for headless mode
 
         driver = webdriver.Chrome(options=chrome_options)
         driver.execute_cdp_cmd(
