@@ -160,18 +160,29 @@ def load_data(image_link):
     img = tf.convert_to_tensor(img)
     return img
 
-def save_product_links_to_csv(self, links, filename="product_links.csv"):
-    """
-    Сохраняет список (img_src, href) в CSV-файл.
-    """
-    import csv
 
-    with open(filename, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["img_src", "href"])
-        for img_src, href in links:
-            writer.writerow([img_src, href])
-    print(f"Сохранено {len(links)} ссылок в {filename}")
+class Processor(metaclass=RuntimeMeta):
+
+    def __init__(self, image_size, batch_size):
+        self.image_size = image_size
+        self.batch_size = batch_size
+        self.session = requests.Session()
+        self.user_agents = self.generate_similar_user_agents()
+        self.headers_list = self.generate_headers_list()
+        self.proxies = []
+
+    def save_product_links_to_csv(self, links, filename="product_links.csv"):
+        """
+        Сохраняет список (img_src, href) в CSV-файл.
+        """
+        import csv
+
+        with open(filename, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["img_src", "href"])
+            for img_src, href in links:
+                writer.writerow([img_src, href])
+        print(f"Сохранено {len(links)} ссылок в {filename}")
 
 
 class Processor(metaclass=RuntimeMeta):
@@ -265,7 +276,7 @@ class Processor(metaclass=RuntimeMeta):
             human_sleep(1, 2)
             print("Попап закрыт")
         except Exception as e:
-            print("Попап не найден или уже закрыт:", e)
+            print("Попап не найден или уже закрыт")
 
         # Кликаем по кнопке поиска
         try:
