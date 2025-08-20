@@ -288,6 +288,19 @@ class Processor(metaclass=RuntimeMeta):
                 if len(collected) >= max_links:
                     return collected
 
+                # Логируем все найденные кнопки пагинации
+                all_buttons = driver.find_elements(
+                    By.XPATH,
+                    '//button[starts-with(@class, "search-pagination-arrow-container--")]',
+                )
+                logging.info(
+                    f"Найдено {len(all_buttons)} кнопок пагинации на странице {page+1}:"
+                )
+                for idx, btn in enumerate(all_buttons, 1):
+                    logging.info(
+                        f"Кнопка {idx}: class='{btn.get_attribute('class')}', data-spm='{btn.get_attribute('data-spm-anchor-id')}'"
+                    )
+
             if page == max_steps:
                 break
             # Скроллим вниз перед переходом
