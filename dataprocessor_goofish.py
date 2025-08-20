@@ -161,6 +161,8 @@ def load_data(image_link):
     return img
 
 
+
+
 class Processor(metaclass=RuntimeMeta):
 
     def __init__(self, image_size, batch_size):
@@ -170,7 +172,7 @@ class Processor(metaclass=RuntimeMeta):
         self.user_agents = self.generate_similar_user_agents()
         self.headers_list = self.generate_headers_list()
         self.proxies = []
-
+        
     def save_product_links_to_csv(self, links, filename="product_links.csv"):
         """
         Сохраняет список (img_src, href) в CSV-файл.
@@ -182,18 +184,7 @@ class Processor(metaclass=RuntimeMeta):
             writer.writerow(["img_src", "href"])
             for img_src, href in links:
                 writer.writerow([img_src, href])
-        print(f"Сохранено {len(links)} ссылок в {filename}")
-
-
-class Processor(metaclass=RuntimeMeta):
-
-    def __init__(self, image_size, batch_size):
-        self.image_size = image_size
-        self.batch_size = batch_size
-        self.session = requests.Session()
-        self.user_agents = self.generate_similar_user_agents()
-        self.headers_list = self.generate_headers_list()
-        self.proxies = []
+            print(f"Сохранено {len(links)} ссылок в {filename}")
 
     def generate_similar_user_agents(self):
         return [
