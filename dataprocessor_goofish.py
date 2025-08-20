@@ -211,28 +211,28 @@ class Processor(metaclass=RuntimeMeta):
         driver.get("https://www.goofish.com")
         human_sleep(3, 7)
 
-        cookies = [
-            {
-                "name": "_m_h5_tk",
-                "value": "f7f7b405844996549b89e7d446ab17c7_1755010189196",
-            },
-            {"name": "_m_h5_tk_enc", "value": "48b7325338ec034774238119500289de"},
-            {"name": "atpsida", "value": "479518a88d5ec1c53e46658a_1755000829_1"},
-            {"name": "cna", "value": "B6kbIbUefW4CAZ611+tfYR/D"},
-            {"name": "cna", "value": "B6kbITpMRmkCAZ611+t7b+sL"},
-            {"name": "cookie2", "value": "1626f235bbcdd7170bef61fe4eb9101e"},
-            {"name": "mtop_partitioned_detect", "value": "1"},
-            {"name": "sca", "value": "a2d8698f"},
-            {"name": "t", "value": "40000c4303f6358b27bd11c644531188"},
-            {
-                "name": "tfstk",
-                "value": "gBJIaV02UUpackOAOToaho_OyXB5Fck4FusJm3eU29BLyzKA7e7FL0D5yebwLw-FpkAMuneeLXXzF9Xlequq3xoHxTX8Ukfatwx9jgnNvwnSGJBlequa_8CnhTYKCwENwhn14gy8wUCpXOIVWyUpywCTWisceaLJyNIOqgz8JJFpXAQG2TQJyTn6XNj5eaLRectO7TPO2b_eAmOw5Gurraxd58eJpX1ClFVze8p1A69JvNZUYdsCOZC-0PfkhnKpng9oD7_5Ag7L3ZOz37Z1i8s1uci_Z7XRFMDtoG_S86IGAmmsfyUh9Gj1Lci_ZrCdjGrifcaCw",
-            },
-            {"name": "xlly_s", "value": "1"},
-        ]
+        # cookies = [
+        #     {
+        #         "name": "_m_h5_tk",
+        #         "value": "f7f7b405844996549b89e7d446ab17c7_1755010189196",
+        #     },
+        #     {"name": "_m_h5_tk_enc", "value": "48b7325338ec034774238119500289de"},
+        #     {"name": "atpsida", "value": "479518a88d5ec1c53e46658a_1755000829_1"},
+        #     {"name": "cna", "value": "B6kbIbUefW4CAZ611+tfYR/D"},
+        #     {"name": "cna", "value": "B6kbITpMRmkCAZ611+t7b+sL"},
+        #     {"name": "cookie2", "value": "1626f235bbcdd7170bef61fe4eb9101e"},
+        #     {"name": "mtop_partitioned_detect", "value": "1"},
+        #     {"name": "sca", "value": "a2d8698f"},
+        #     {"name": "t", "value": "40000c4303f6358b27bd11c644531188"},
+        #     {
+        #         "name": "tfstk",
+        #         "value": "gBJIaV02UUpackOAOToaho_OyXB5Fck4FusJm3eU29BLyzKA7e7FL0D5yebwLw-FpkAMuneeLXXzF9Xlequq3xoHxTX8Ukfatwx9jgnNvwnSGJBlequa_8CnhTYKCwENwhn14gy8wUCpXOIVWyUpywCTWisceaLJyNIOqgz8JJFpXAQG2TQJyTn6XNj5eaLRectO7TPO2b_eAmOw5Gurraxd58eJpX1ClFVze8p1A69JvNZUYdsCOZC-0PfkhnKpng9oD7_5Ag7L3ZOz37Z1i8s1uci_Z7XRFMDtoG_S86IGAmmsfyUh9Gj1Lci_ZrCdjGrifcaCw",
+        #     },
+        #     {"name": "xlly_s", "value": "1"},
+        # ]
 
-        for cookie in cookies:
-            driver.add_cookie(cookie)
+        # for cookie in cookies:
+        #     driver.add_cookie(cookie)
 
         collected = []
         driver.get(cfg.mainpage_url_goofish)
