@@ -293,13 +293,6 @@ class Processor(metaclass=RuntimeMeta):
                     By.XPATH,
                     '//button[starts-with(@class, "search-pagination-arrow-container--")]',
                 )
-                logging.info(
-                    f"Найдено {len(all_buttons)} кнопок пагинации на странице {page+1}:"
-                )
-                for idx, btn in enumerate(all_buttons, 1):
-                    logging.info(
-                        f"Кнопка {idx}: class='{btn.get_attribute('class')}', data-spm='{btn.get_attribute('data-spm-anchor-id')}'"
-                    )
 
             if page == max_steps:
                 break
@@ -308,17 +301,37 @@ class Processor(metaclass=RuntimeMeta):
             human_sleep(1.5, 3.5)
             try:
                 wait = WebDriverWait(driver, 15)
-                next_arrow = wait.until(
-                    EC.element_to_be_clickable(
-                        (
-                            By.XPATH,
-                            '(//button[starts-with(@class, "search-pagination-arrow-container--")])[2]',
-                        )
-                    )
+                # Находим все кнопки пагинации
+                all_buttons = driver.find_elements(
+                    By.XPATH,
+                    '//button[starts-with(@class, "search-pagination-arrow-container--")]',
                 )
-                ActionChains(driver).move_to_element(next_arrow).pause(
-                    random.uniform(0.3, 1.2)
-                ).click().perform()
+                if len(all_buttons) < 2:
+                    logging.warning(
+                        f"Ожидалось минимум 2 кнопки пагинации, найдено {len(all_buttons)}"
+                    )
+                    break
+                next_arrow_btn = all_buttons[1]  # Вторая кнопка — обычно 'вперёд'
+                # Пробуем найти внутренний div с классом 'search-pagination-arrow-right--'
+                try:
+                    next_arrow_div = next_arrow_btn.find_element(
+                        By.XPATH,
+                        './/div[contains(@class, "search-pagination-arrow-right--")]',
+                    )
+                    logging.info(
+                        f"Пробуем кликнуть по div внутри второй кнопки: class='{next_arrow_div.get_attribute('class')}'"
+                    )
+                    driver.execute_script("arguments[0].click();", next_arrow_div)
+                    logging.info(
+                        f"Клик по div внутри второй кнопки успешен, страница {page+1}"
+                    )
+                except Exception as e:
+                    logging.warning(
+                        f"Не удалось кликнуть по div внутри второй кнопки: {e}"
+                    )
+                    logging.info(f"Пробуем кликнуть по самой второй кнопке")
+                    driver.execute_script("arguments[0].click();", next_arrow_btn)
+                    logging.info(f"Клик по второй кнопке успешен, страница {page+1}")
                 human_sleep(2.5, 5.5)
             except Exception as e:
                 print(f"Не удалось перейти на страницу {page+1} по стрелке: {e}")
