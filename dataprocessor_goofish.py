@@ -318,9 +318,6 @@ class Processor(metaclass=RuntimeMeta):
                         By.XPATH,
                         './/div[contains(@class, "search-pagination-arrow-right--")]',
                     )
-                    logging.info(
-                        f"Пробуем кликнуть по div внутри второй кнопки: class='{next_arrow_div.get_attribute('class')}'"
-                    )
                     driver.execute_script("arguments[0].click();", next_arrow_div)
                     logging.info(
                         f"Клик по div внутри второй кнопки успешен, страница {page+1}"
@@ -329,9 +326,7 @@ class Processor(metaclass=RuntimeMeta):
                     logging.warning(
                         f"Не удалось кликнуть по div внутри второй кнопки: {e}"
                     )
-                    logging.info(f"Пробуем кликнуть по самой второй кнопке")
                     driver.execute_script("arguments[0].click();", next_arrow_btn)
-                    logging.info(f"Клик по второй кнопке успешен, страница {page+1}")
                 human_sleep(2.5, 5.5)
             except Exception as e:
                 print(f"Не удалось перейти на страницу {page+1} по стрелке: {e}")
