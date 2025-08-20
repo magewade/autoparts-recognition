@@ -312,42 +312,52 @@ def reduce(
 
 
 if __name__ == "__main__":
-    model_name, api_keys, additional_data = parse_args()
-    assert model_name in ["gemini"], "There is no available model you're looking for"
+    # --- СТАРЫЙ ПАЙПЛАЙН (закомментирован) ---
+    # model_name, api_keys, additional_data = parse_args()
+    # assert model_name in ["gemini"], "There is no available model you're looking for"
+    # if model_name == "gemini":
+    #     model = GeminiInference(
+    #         api_keys=api_keys,
+    #         model_name=additional_data["gemini_model"],
+    #         car_brand=additional_data["car_brand"],
+    #         prompt_override=additional_data["prompt_override"],
+    #     )
+    # else:
+    #     model = None
+    # processor = Processor(image_size=(512, 512), batch_size=32)
+    # picker = TargetModel()
+    # logging.info(f"Starting encoding process with model: {model_name}")
+    # encoding_result = reduce(
+    #     additional_data["main_link"],
+    #     picker=picker,
+    #     model=model,
+    #     processor=processor,
+    #     ignore_error=additional_data["ignore_error"],
+    #     max_steps=additional_data["max_steps"],
+    #     max_links=additional_data["max_links"],
+    #     savename=additional_data["savename"],
+    # )
+    # try:
+    #     pd.DataFrame(encoding_result).to_excel(
+    #         f"{additional_data['savename']}.xlsx", index=False
+    #     )
+    #     logging.info(f"Final results saved to {additional_data['savename']}.xlsx")
+    # except Exception as e:
+    #     logging.error(f"Error saving to Excel: {e}. Saving in pickle format instead.")
+    #     with open(f'{additional_data["savename"]}.pkl', "wb") as f:
+    #         pickle.dump(encoding_result, f)
+    #     logging.info(f"Final results saved to {additional_data['savename']}.pkl")
 
-    if model_name == "gemini":
-        model = GeminiInference(
-            api_keys=api_keys,
-            model_name=additional_data["gemini_model"],
-            car_brand=additional_data["car_brand"],
-            prompt_override=additional_data["prompt_override"],
-        )
-    else:
-        model = None
-
+    # --- ТЕКУЩИЙ ПАЙПЛАЙН: только сбор ссылок и сохранение в CSV ---
+    _, _, additional_data = parse_args()
     processor = Processor(image_size=(512, 512), batch_size=32)
-    picker = TargetModel()
-
-    logging.info(f"Starting encoding process with model: {model_name}")
-    encoding_result = reduce(
-        additional_data["main_link"],
-        picker=picker,
-        model=model,
-        processor=processor,
-        ignore_error=additional_data["ignore_error"],
-        max_steps=additional_data["max_steps"],
-        max_links=additional_data["max_links"],
-        savename=additional_data["savename"],
-    )
-
-    # Save final results
+    driver = processor.create_persistent_driver()
     try:
-        pd.DataFrame(encoding_result).to_excel(
-            f"{additional_data['savename']}.xlsx", index=False
+        links = processor.collect_product_links_selenium(
+            driver,
+            max_steps=additional_data["max_steps"],
+            max_links=additional_data["max_links"],
         )
-        logging.info(f"Final results saved to {additional_data['savename']}.xlsx")
-    except Exception as e:
-        logging.error(f"Error saving to Excel: {e}. Saving in pickle format instead.")
-        with open(f'{additional_data["savename"]}.pkl', "wb") as f:
-            pickle.dump(encoding_result, f)
-        logging.info(f"Final results saved to {additional_data['savename']}.pkl")
+        processor.save_product_links_to_csv(links, filename="product_links.csv")
+    finally:
+        processor.close_persistent_driver(driver)

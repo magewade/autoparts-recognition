@@ -160,8 +160,22 @@ def load_data(image_link):
     img = tf.convert_to_tensor(img)
     return img
 
+def save_product_links_to_csv(self, links, filename="product_links.csv"):
+    """
+    Сохраняет список (img_src, href) в CSV-файл.
+    """
+    import csv
+
+    with open(filename, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["img_src", "href"])
+        for img_src, href in links:
+            writer.writerow([img_src, href])
+    print(f"Сохранено {len(links)} ссылок в {filename}")
+
 
 class Processor(metaclass=RuntimeMeta):
+
     def __init__(self, image_size, batch_size):
         self.image_size = image_size
         self.batch_size = batch_size
