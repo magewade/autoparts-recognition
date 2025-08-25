@@ -34,7 +34,6 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-
 def create_chrome_driver(user_agent=None, debug_port=None):
     time.sleep(2)
     logging.info("Killing all chrome/chromium processes before starting new driver...")
@@ -161,8 +160,6 @@ def load_data(image_link):
     return img
 
 
-
-
 class Processor(metaclass=RuntimeMeta):
 
     def __init__(self, image_size, batch_size):
@@ -172,7 +169,7 @@ class Processor(metaclass=RuntimeMeta):
         self.user_agents = self.generate_similar_user_agents()
         self.headers_list = self.generate_headers_list()
         self.proxies = []
-        
+
     def save_product_links_to_csv(self, links, filename="product_links.csv"):
         """
         Сохраняет список (img_src, href) в CSV-файл.

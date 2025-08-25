@@ -6,6 +6,7 @@ from dataprocessor_goofish import Processor
 import argparse
 
 import pandas as pd
+import os
 import pickle
 
 
@@ -126,112 +127,47 @@ def parse_args():
 
 
 def encode(
-    link: str, picker: TargetModel, model: GeminiInference, processor, **kwargs
+    url: str, images: list, price: str, picker: TargetModel, model: GeminiInference
 ) -> dict:
-    logging.info(f"Processing link: {link}")
-    max_retries = 3
-    base_delay = 5
-
-    driver = kwargs.get("driver")
-    for attempt in range(max_retries):
+    logging.info(f"Processing url: {url}")
+    if not images or images == [""]:
+        return {
+            "predicted_number": "NO_IMAGES",
+            "url": url,
+            "price": price,
+            "correct_image_link": "N/A",
+            "incorrect_image_links": ["N/A"],
+        }
+    try:
+        images_probs = picker.do_inference_return_probs(images)
+    except Exception as e:
+        logging.warning(f"Error in do_inference_return_probs: {e}")
+        images_probs = [
+            {"image_link": img, "score": 1.0 / len(images)} for img in images
+        ]
+    detail_number = "none"
+    target_image_link = None
+    for target_image_link, score in [
+        (i["image_link"], i["score"]) for i in images_probs
+    ]:
         try:
-            page_img_links = processor.parse_big_images_from_slider_selenium(
-                driver, link
-            )
-            page_img_links = list(set(page_img_links))
-
-            logging.info(f"Checking {link} for images")
-            logging.info(f"Found {len(page_img_links)} unique image links")
-
-            if not page_img_links:
-                logging.warning(f"No images found for link: {link}")
-                print("DEBUG page_img_links:", page_img_links)
-                print("DEBUG target_image_link:", None)
-                print(
-                    "DEBUG incorrect_image_links:",
-                    [l for l in page_img_links],
-                )
-                return {
-                    "predicted_number": "NO_IMAGES",
-                    "url": link,
-                    "price": "N/A",
-                    "correct_image_link": "N/A",
-                    "incorrect_image_links": ["N/A"],
-                }
-
-            try:
-                images_probs = picker.do_inference_return_probs(page_img_links)
-            except ValueError as ve:
-                if "math domain error" in str(ve).lower():
-                    logging.warning(
-                        f"Math domain error occurred during inference. Using default probabilities."
-                    )
-                    images_probs = [
-                        {"image_link": link, "score": 1.0 / len(page_img_links)}
-                        for link in page_img_links
-                    ]
-                else:
-                    raise
-
-            detail_number = "none"
-            target_image_link = None
-
-            for target_image_link, score in [
-                (i["image_link"], i["score"]) for i in images_probs
-            ]:
-                try:
-                    logging.info(
-                        f"Predicting on image {target_image_link} with score {score}"
-                    )
-                    detail_number = str(model(target_image_link))
-
-                    if detail_number.lower().strip() != "none":
-                        break
-                except Exception as e:
-                    if "429 Resource has been exhausted" in str(e):
-                        delay = base_delay + random.uniform(0, 2)
-                        logging.warning(
-                            f"429 error encountered. Retrying in {delay:.2f} seconds..."
-                        )
-                        time.sleep(delay)
-                        continue
-                    logging.warning(f"Error processing image {target_image_link}: {e}")
-                    continue
-
-            if detail_number.lower().strip() == "none":
-                logging.warning("No detail number found in any image")
-
-            logging.info(f"Predicted number id: {detail_number}")
-
-            parsed_info = processor.load_product_info_selenium(driver, link)
-            return {
-                "predicted_number": detail_number,
-                "url": link,
-                "price": parsed_info.get("price", "N/A"),
-                "correct_image_link": target_image_link,
-                "incorrect_image_links": [
-                    l for l in page_img_links if l != target_image_link
-                ]
-                or ["N/A"],
-            }
+            logging.info(f"Predicting on image {target_image_link} with score {score}")
+            detail_number = str(model(target_image_link))
+            if detail_number.lower().strip() != "none":
+                break
         except Exception as e:
-            if attempt < max_retries - 1:
-                delay = base_delay + random.uniform(0, 2)
-                logging.warning(
-                    f"Error occurred: {e}. Retrying in {delay:.2f} seconds... (Attempt {attempt + 1}/{max_retries})"
-                )
-                time.sleep(delay)
-            else:
-                logging.error(
-                    f"Error processing link {link} after {max_retries} attempts: {e}"
-                )
-                return {
-                    "predicted_number": "ERROR",
-                    "url": link,
-                    "price": "N/A",
-                    "correct_image_link": "N/A",
-                    "incorrect_image_links": ["N/A"],
-                }
+            logging.warning(f"Error processing image {target_image_link}: {e}")
+            continue
+    if detail_number.lower().strip() == "none":
+        logging.warning("No detail number found in any image")
+    return {
+        "predicted_number": detail_number,
+        "url": url,
+        "price": price,
+        "correct_image_link": target_image_link,
+        "incorrect_image_links": [l for l in images if l != target_image_link]
+        or ["N/A"],
+    }
 
 
 def save_intermediate_results(result, filename):
@@ -247,108 +183,72 @@ def save_intermediate_results(result, filename):
 
 
 def reduce(
-    main_link: str,
     picker: TargetModel,
     model: GeminiInference,
-    processor: Processor,
-    ignore_error: bool = False,
-    max_steps: int = 3,
-    max_links: int = 90,
     savename: str = "recognized_data",
-    **kwargs,
+    parsed_csv: str = "parsed_products.csv",
 ):
-    logging.info(f"Starting link collection from {main_link}")
-    driver = processor.create_persistent_driver()
-    try:
-        all_links = processor.collect_product_links_selenium(
-            driver,
-            max_steps=additional_data["max_steps"],
-            max_links=additional_data["max_links"],
-        )
-        all_links = list(set([l[1] for l in all_links]))  # l[1] — ссылка на карточку
-        logging.info(f"Collected {len(all_links)} unique links")
+    df = pd.read_csv(parsed_csv)
+    result = {
+        "predicted_number": [],
+        "url": [],
+        "price": [],
+        "correct_image_link": [],
+        "incorrect_image_links": [],
+    }
+    # Проверяем, есть ли уже сохранённый результат
+    processed_urls = set()
+    import os
 
-        result = {
-            "predicted_number": [],
-            "url": [],
-            "price": [],
-            "correct_image_link": [],
-            "incorrect_image_links": [],
-        }
-
-        max_retries = 20
-        base_delay = 5
-
-        for i, page_link in enumerate(all_links):
-            for attempt in range(max_retries):
-                try:
-                    time.sleep(random.uniform(1, 3))
-                    logging.info(f"Processing {i+1}/{len(all_links)} link: {page_link}")
-                    encoded_data = encode(
-                        page_link, picker, model, processor, driver=driver
-                    )
-                    processor.process_encoded_data(encoded_data, result)
-                    if (i + 1) % 10 == 0:
-                        save_intermediate_results(
-                            result, f"{savename}_part_{i // 10 + 1}"
-                        )
-                    logging.info("Processing successful")
-                    break
-                except Exception as e:
-                    logging.error(f"Unexpected error processing link {page_link}: {e}")
-                    encoded_data = {
-                        "predicted_number": "ERROR",
-                        "url": page_link,
-                        "price": "N/A",
-                        "correct_image_link": "N/A",
-                        "incorrect_image_links": ["N/A"],
-                    }
-                    processor.process_encoded_data(encoded_data, result)
-                    break
-
-        return result
-    finally:
-        processor.close_persistent_driver(driver)
+    if os.path.exists(f"{savename}.xlsx"):
+        try:
+            prev = pd.read_excel(f"{savename}.xlsx")
+            processed_urls = set(prev["url"].astype(str))
+            # Восстанавливаем результат, чтобы не потерять старые строки
+            for col in result:
+                if col in prev:
+                    result[col] = prev[col].tolist()
+        except Exception as e:
+            logging.warning(f"Could not load previous results: {e}")
+    # Обрабатываем только новые строки
+    for i, row in df.iterrows():
+        url = str(row.get("url", ""))
+        if url in processed_urls:
+            continue
+        price = row.get("price", "N/A")
+        images = row.get("images", "")
+        images_list = [img for img in str(images).split(",") if img]
+        try:
+            encoded_data = encode(url, images_list, price, picker, model)
+        except Exception as e:
+            logging.error(f"Error processing row {i} ({url}): {e}")
+            encoded_data = {
+                "predicted_number": "ERROR",
+                "url": url,
+                "price": price,
+                "correct_image_link": "N/A",
+                "incorrect_image_links": images_list or ["N/A"],
+            }
+        for k, v in encoded_data.items():
+            if k == "incorrect_image_links":
+                result[k].append(", ".join(v) if isinstance(v, list) else str(v))
+            else:
+                result[k].append(v)
+        if (len(result["url"]) % 10) == 0:
+            save_intermediate_results(
+                result, f"{savename}_part_{len(result['url']) // 10}"
+            )
+        # Сохраняем прогресс после каждой строки (можно закомментировать для ускорения)
+        try:
+            pd.DataFrame(result).to_excel(f"{savename}.xlsx", index=False)
+        except Exception as e:
+            logging.warning(f"Could not save progress: {e}")
+    return result
 
 
 if __name__ == "__main__":
-    # --- СТАРЫЙ ПАЙПЛАЙН (закомментирован) ---
-    # model_name, api_keys, additional_data = parse_args()
-    # assert model_name in ["gemini"], "There is no available model you're looking for"
-    # if model_name == "gemini":
-    #     model = GeminiInference(
-    #         api_keys=api_keys,
-    #         model_name=additional_data["gemini_model"],
-    #         car_brand=additional_data["car_brand"],
-    #         prompt_override=additional_data["prompt_override"],
-    #     )
-    # else:
-    #     model = None
-    # processor = Processor(image_size=(512, 512), batch_size=32)
-    # picker = TargetModel()
-    # logging.info(f"Starting encoding process with model: {model_name}")
-    # encoding_result = reduce(
-    #     additional_data["main_link"],
-    #     picker=picker,
-    #     model=model,
-    #     processor=processor,
-    #     ignore_error=additional_data["ignore_error"],
-    #     max_steps=additional_data["max_steps"],
-    #     max_links=additional_data["max_links"],
-    #     savename=additional_data["savename"],
-    # )
-    # try:
-    #     pd.DataFrame(encoding_result).to_excel(
-    #         f"{additional_data['savename']}.xlsx", index=False
-    #     )
-    #     logging.info(f"Final results saved to {additional_data['savename']}.xlsx")
-    # except Exception as e:
-    #     logging.error(f"Error saving to Excel: {e}. Saving in pickle format instead.")
-    #     with open(f'{additional_data["savename"]}.pkl', "wb") as f:
-    #         pickle.dump(encoding_result, f)
-    #     logging.info(f"Final results saved to {additional_data['savename']}.pkl")
 
-    # --- ТЕКУЩИЙ ПАЙПЛАЙН: только сбор ссылок и сохранение в CSV ---
+    # 1. Сбор ссылок
     _, _, additional_data = parse_args()
     processor = Processor(image_size=(512, 512), batch_size=32)
     driver = processor.create_persistent_driver()
@@ -361,3 +261,97 @@ if __name__ == "__main__":
         processor.save_product_links_to_csv(links, filename="product_links.csv")
     finally:
         processor.close_persistent_driver(driver)
+
+    # 2. Playwright: обработка карточек батчами по 10, сохранение в parsed_products.csv
+    import pandas as pd
+    import asyncio
+    from dataprocessor_goofish import GoofishParserPlaywrightAsync
+
+    async def process_links_playwright(
+        links, batch_size=10, output_csv="parsed_products.csv"
+    ):
+        parser = GoofishParserPlaywrightAsync()
+        from playwright.async_api import async_playwright
+        import csv
+
+        # Заголовки для CSV
+        fieldnames = ["url", "images", "price"]
+        # Если файл не существует — пишем заголовки
+        if not os.path.exists(output_csv):
+            with open(output_csv, mode="w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            for i in range(0, len(links), batch_size):
+                batch = links[i : i + batch_size]
+                results = []
+                for url in batch:
+                    try:
+                        images = await parser.parse_big_images(url, page)
+                        info = await parser.load_product_info(url, page)
+                        results.append(
+                            {
+                                "url": url,
+                                "images": ",".join(images),
+                                "price": info.get("price", "N/A"),
+                            }
+                        )
+                    except Exception as e:
+                        results.append(
+                            {"url": url, "images": "ERROR", "price": "ERROR"}
+                        )
+                # Сохраняем батч
+                with open(output_csv, mode="a", newline="", encoding="utf-8") as f:
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                    for row in results:
+                        writer.writerow(row)
+            await browser.close()
+
+    # Читаем ссылки из product_links.csv (берём только href)
+    df_links = pd.read_csv("product_links.csv")
+    card_links = df_links["href"].dropna().unique().tolist()
+    # Запускаем Playwright обработку
+    asyncio.run(
+        process_links_playwright(
+            card_links, batch_size=10, output_csv="parsed_products.csv"
+        )
+    )
+
+    # 3. Запуск старого пайплайна
+    model_name, api_keys, additional_data = parse_args()
+    assert model_name in ["gemini"], "There is no available model you're looking for"
+    if model_name == "gemini":
+        model = GeminiInference(
+            api_keys=api_keys,
+            model_name=additional_data["gemini_model"],
+            car_brand=additional_data["car_brand"],
+            prompt_override=additional_data["prompt_override"],
+        )
+    else:
+        model = None
+    processor = Processor(image_size=(512, 512), batch_size=32)
+    picker = TargetModel()
+    logging.info(f"Starting encoding process with model: {model_name}")
+    encoding_result = reduce(
+        additional_data["main_link"],
+        picker=picker,
+        model=model,
+        processor=processor,
+        ignore_error=additional_data["ignore_error"],
+        max_steps=additional_data["max_steps"],
+        max_links=additional_data["max_links"],
+        savename=additional_data["savename"],
+    )
+    try:
+        pd.DataFrame(encoding_result).to_excel(
+            f"{additional_data['savename']}.xlsx", index=False
+        )
+        logging.info(f"Final results saved to {additional_data['savename']}.xlsx")
+    except Exception as e:
+        logging.error(f"Error saving to Excel: {e}. Saving in pickle format instead.")
+        with open(f'{additional_data["savename"]}.pkl', "wb") as f:
+            pickle.dump(encoding_result, f)
+        logging.info(f"Final results saved to {additional_data['savename']}.pkl")
