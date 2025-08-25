@@ -91,12 +91,28 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
                 logging.warning(f"Picker error: {e}")
                 predicted_images[i] = images_list[0]
                 confidences[i] = ""
-            try:
-                llm_pred = llm(predicted_images[i])
-                llm_predictions[i] = llm_pred
-            except Exception as e:
-                logging.warning(f"LLM error: {e}")
-                llm_predictions[i] = ""
+            # Две попытки обращения к LLM: вторая с альтернативным prompt
+            llm_pred = ""
+            for attempt in range(2):
+                try:
+                    if attempt == 0:
+                        prompt = predicted_images[i]
+                    else:
+                        # Альтернативный prompt: можно добавить уточнение или другой формат
+                        prompt = f"RETRY: {predicted_images[i]}"
+                    llm_pred = llm(prompt)
+                    # Проверяем на nan, пустоту, NO_PARTS
+                    if (
+                        not llm_pred
+                        or "nan" in str(llm_pred).lower()
+                        or "no_parts" in str(llm_pred).lower()
+                    ):
+                        raise ValueError(f"Bad LLM response: {llm_pred}")
+                    break  # успех
+                except Exception as e:
+                    logging.warning(f"LLM error (attempt {attempt+1}): {e}")
+                    llm_pred = ""
+            llm_predictions[i] = llm_pred
             if (i + 1) % chunk_size == 0:
                 temp_df = df.copy()
                 temp_df["predicted_image"] = predicted_images
