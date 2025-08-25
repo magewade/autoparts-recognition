@@ -1,3 +1,7 @@
+import asyncio
+from playwright.async_api import async_playwright
+from bs4 import BeautifulSoup
+
 import logging
 from config import Config as cfg
 from config import RuntimeMeta
@@ -33,6 +37,59 @@ import subprocess
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
+
+# --- Playwright Async Parser ---
+class GoofishParserPlaywrightAsync:
+    def __init__(self):
+        self.headers_list = [
+            {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36"
+            },
+            {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Gecko/20100101 Firefox/127.0"
+            },
+        ]
+
+    async def parse_big_images(self, page_url, page):
+        image_links = set()
+        await page.goto(page_url, wait_until="networkidle")
+        await asyncio.sleep(2)
+        carousel_imgs = await page.query_selector_all(
+            '//div[starts-with(@class, "carouselItem--")]//img[contains(@style, "width: 100%")]',
+        )
+        for img in carousel_imgs:
+            src = await img.get_attribute("src")
+            if src and "alicdn.com" in src:
+                if src.startswith("//"):
+                    src = "https:" + src
+                image_links.add(src)
+        try:
+            active_img = await page.query_selector(
+                '//img[contains(@style, "width: 100%") and contains(@style, "height: 100%") and not(ancestor::div[starts-with(@class, "carouselItem--")])]'
+            )
+            if active_img:
+                src = await active_img.get_attribute("src")
+                if src and "alicdn.com" in src:
+                    if src.startswith("//"):
+                        src = "https:" + src
+                    image_links.add(src)
+        except Exception:
+            pass
+        return list(image_links)
+
+    async def load_product_info(self, page_url, page):
+        await page.goto(page_url, wait_until="networkidle")
+        await asyncio.sleep(2)
+        html = await page.content()
+        soup = BeautifulSoup(html, "html.parser")
+        price_tag = soup.find(
+            lambda tag: tag.has_attr("class")
+            and any("price--" in c for c in tag["class"])
+        )
+        price = price_tag.text.strip() if price_tag else "N/A"
+        return {"price": price}
+
 
 def create_chrome_driver(user_agent=None, debug_port=None):
     time.sleep(2)
