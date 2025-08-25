@@ -95,12 +95,8 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
             for attempt in range(2):
                 try:
                     llm_pred = llm(predicted_images[i])
-                    if (
-                        not llm_pred
-                        or "nan" in str(llm_pred).lower()
-                        or "no_parts" in str(llm_pred).lower()
-                    ):
-                        raise ValueError(f"Bad LLM response: {llm_pred}")
+                    if not llm_pred:
+                        raise ValueError(f"Empty LLM response: {llm_pred}")
                     break  # успех
                 except Exception as e:
                     logging.warning(f"LLM error (attempt {attempt+1}): {e}")
