@@ -1,6 +1,9 @@
 import asyncio
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
+import pandas as pd
+from tqdm.asyncio import tqdm_asyncio
+from pathlib import Path
 
 import logging
 from config import Config as cfg
@@ -37,14 +40,6 @@ import subprocess
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
-
-
-# --- Playwright Async Parser ---
-
-# --- Playwright Async Parser ---
-import pandas as pd
-from tqdm.asyncio import tqdm_asyncio
-from pathlib import Path
 
 
 class GoofishParserPlaywrightAsync:
@@ -98,7 +93,6 @@ class GoofishParserPlaywrightAsync:
         return {"price": price}
 
 
-# --- Async DataFrame Enrichment ---
 async def enrich_dataframe_playwright_async(
     df, parser, output_path="results.csv", chunk_size=10
 ):

@@ -1,5 +1,20 @@
 import ast
 
+import logging
+import pandas as pd
+import os
+import argparse
+from config import Config
+from dataprocessor_goofish import (
+    Processor,
+    GoofishParserPlaywrightAsync,
+    enrich_dataframe_playwright_async,
+)
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 
 def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.csv"):
     from picker_model import TargetModel
@@ -74,38 +89,6 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
     df["llm_prediction"] = llm_predictions
     df.to_csv(args.save_file_name + ".csv", index=False)
     logging.info(f"Inference results saved to {args.save_file_name}.csv")
-
-
-# --- SIMPLE TWO-STAGE PIPELINE: 1) LINKS, 2) IMAGES+PRICE ---
-import logging
-import pandas as pd
-import os
-from config import Config
-from dataprocessor_goofish import (
-    Processor,
-    GoofishParserPlaywrightAsync,
-    enrich_dataframe_playwright_async,
-)
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
-
-import logging
-import pandas as pd
-import os
-import argparse
-from config import Config
-from dataprocessor_goofish import (
-    Processor,
-    GoofishParserPlaywrightAsync,
-    enrich_dataframe_playwright_async,
-)
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 
 
 def parse_args():
