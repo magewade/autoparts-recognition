@@ -6,9 +6,37 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
     from gemini_model import GeminiInference
     import pandas as pd
     import logging
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--api-keys", nargs="+", required=True, help="List of API keys to use"
+    )
+    parser.add_argument(
+        "--gemini-api-model",
+        type=str,
+        default="gemini-2.5-pro",
+        help="Gemini model name",
+    )
+    parser.add_argument("--car-brand", type=str, default=None, help="Car brand")
+    parser.add_argument(
+        "--prompt_override", type=str, default=None, help="Prompt override"
+    )
+    parser.add_argument(
+        "--save-file-name",
+        type=str,
+        default="final_products",
+        help="Output CSV base name",
+    )
+    args, _ = parser.parse_known_args()
 
     picker = TargetModel()
-    llm = GeminiInference()
+    llm = GeminiInference(
+        api_keys=args.api_keys,
+        model_name=args.gemini_api_model,
+        car_brand=args.car_brand,
+        prompt_override=args.prompt_override,
+    )
     df = pd.read_csv(parsed_csv)
     predicted_images = []
     llm_predictions = []
@@ -38,8 +66,8 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
             llm_predictions.append("")
     df["predicted_image"] = predicted_images
     df["llm_prediction"] = llm_predictions
-    df.to_csv(output_csv, index=False)
-    logging.info(f"Inference results saved to {output_csv}")
+    df.to_csv(args.save_file_name + ".csv", index=False)
+    logging.info(f"Inference results saved to {args.save_file_name}.csv")
 
 
 # --- SIMPLE TWO-STAGE PIPELINE: 1) LINKS, 2) IMAGES+PRICE ---
@@ -124,4 +152,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.csv")
+    run_inference(parsed_csv="parsed_products.csv")
