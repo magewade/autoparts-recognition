@@ -1,12 +1,18 @@
-from dataprocessor import * 
-from config import * 
+from dataprocessor import *
+from config import *
 import os
 
 import tensorflow as tf
 from tensorflow.keras.applications import MobileNetV3Small
-from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout, BatchNormalization
+from tensorflow.keras.layers import (
+    Dense,
+    GlobalAveragePooling2D,
+    Dropout,
+    BatchNormalization,
+)
 from tensorflow.keras.models import Model
 import numpy as np
+
 
 def build_model(num_classes) -> Model:
     """
@@ -24,15 +30,25 @@ def build_model(num_classes) -> Model:
       A Keras model.
     """
     # Load pre-trained MobileNetV3Small model (without top layers)
-    base_model = MobileNetV3Small(weights='imagenet', include_top=False, input_shape=(512, 512, 3))
+    base_model = MobileNetV3Small(
+        weights="imagenet", include_top=False, input_shape=(512, 512, 3)
+    )
 
     # Add custom layers on top of the base model
     x = base_model.output
     x = GlobalAveragePooling2D()(x)
     x = BatchNormalization()(x)
-    x = Dense(128, activation='gelu', kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02))(x)
+    x = Dense(
+        128,
+        activation="gelu",
+        kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02),
+    )(x)
     x = Dropout(0.2)(x)
-    predictions = Dense(num_classes, activation='sigmoid', kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02))(x)
+    predictions = Dense(
+        num_classes,
+        activation="sigmoid",
+        kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02),
+    )(x)
 
     # Create the final model
     model = Model(inputs=base_model.input, outputs=predictions)
@@ -44,11 +60,12 @@ def build_model(num_classes) -> Model:
     # Compile the model
     model.compile(
         optimizer=tf.keras.optimizers.AdamW(learning_rate=0.001),
-        loss='binary_crossentropy',
-        metrics=['accuracy']
+        loss="binary_crossentropy",
+        metrics=["accuracy"],
     )
 
     return model
+
 
 # model = build_model(1)
 # model.load_weights(cfg.model_path)
@@ -70,45 +87,25 @@ class TargetModel(metaclass=RuntimeMeta):
     def do_inference_return_probs(self, image_links):
         dataset = self.processor(image_links)
         predictions = self.model.predict(dataset)
-
-        # Add a small epsilon to avoid log(0) or division by zero
         epsilon = 1e-10
         predictions = np.clip(predictions, epsilon, 1 - epsilon)
-
         predictions = predictions.flatten().tolist()
         results = [
             {"image_link": l, "score": p} for l, p in zip(image_links, predictions)
         ]
         sorted_results = sorted(results, key=lambda i: float(i["score"]), reverse=True)
-        # Логируем топ-5
-        # print("Top-5 by classifier:")
-        # for r in sorted_results[:5]:
-        #     print(f"  {r['image_link']} | score={r['score']:.4f}")
         return sorted_results
 
     def do_inference_minimodel(self, *args, **kwargs):
         results = self.do_inference_return_probs(*args, **kwargs)
-        return results[0]["image_link"]
+        return results[0]["image_link"], results[0]["score"]
 
     def do_inference(self, image_links, *args, **kwargs):
-        target_image_link = self.do_inference_minimodel(image_links, *args, **kwargs)
-
-        # save target_image_link to local image if it link. return local path
-
-        if target_image_link.startswith("http"):
-            response = requests.get(target_image_link)
-            img = Image.open(BytesIO(response.content))
-            img.save(self.predicted_image_saving_path)
-            target_image_link = self.predicted_image_saving_path
-
-        print(f"target image link: {target_image_link}")
-
-        # --- Gemini этап ---
-        # if hasattr(self, "gemini"):
-        #     gemini_result = self.gemini(target_image_link)
-        #     print(f"Gemini result: {gemini_result}")
-
-        return target_image_link
+        target_image_link, score = self.do_inference_minimodel(
+            image_links, *args, **kwargs
+        )
+        # Не сохраняем на диск, возвращаем ссылку и score
+        return target_image_link, score
 
     def __call__(self, *args, **kwargs):
         return self.do_inference(*args, **kwargs)

@@ -40,6 +40,7 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
     df = pd.read_csv(parsed_csv)
     predicted_images = []
     llm_predictions = []
+    confidences = []
     for i, row in df.iterrows():
         images = row.get("images", "[]")
         try:
@@ -51,13 +52,17 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
         if not images_list:
             predicted_images.append("")
             llm_predictions.append("")
+            confidences.append("")
             continue
         try:
-            pred = picker.do_inference(images_list)
-            predicted_images.append(pred)
+            pred_img, conf = picker.do_inference(images_list)
+            predicted_images.append(pred_img)
+            confidences.append(conf)
+            logging.info(f"Predicted image: {pred_img} | Confidence: {conf:.4f}")
         except Exception as e:
             logging.warning(f"Picker error: {e}")
             predicted_images.append(images_list[0])
+            confidences.append("")
         try:
             llm_pred = llm(predicted_images[-1])
             llm_predictions.append(llm_pred)
@@ -65,6 +70,7 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
             logging.warning(f"LLM error: {e}")
             llm_predictions.append("")
     df["predicted_image"] = predicted_images
+    df["confidence"] = confidences
     df["llm_prediction"] = llm_predictions
     df.to_csv(args.save_file_name + ".csv", index=False)
     logging.info(f"Inference results saved to {args.save_file_name}.csv")
