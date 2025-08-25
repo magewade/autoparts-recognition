@@ -134,11 +134,13 @@ async def enrich_dataframe_playwright_async(
                 temp_df["images"] = images_all
                 temp_df.to_csv(output_path, index=False)
                 print(f"[Info] Промежуточные результаты записаны в {output_path}")
-        temp_df = df.copy()
-        temp_df["price"] = prices
-        temp_df["images"] = images_all
-        temp_df.to_csv(output_path, index=False)
-        print(f"[Info] Все результаты записаны в {output_path}")
+        # Сохраняем финальный результат, если не делится на chunk_size
+        if (i + 1) % chunk_size != 0:
+            temp_df = df.iloc[: i + 1].copy()
+            temp_df["price"] = prices
+            temp_df["images"] = images_all
+            temp_df.to_csv(output_path, index=False)
+            print(f"[Info] Финальные результаты записаны в {output_path}")
         await browser.close()
     return pd.read_csv(output_path)
 

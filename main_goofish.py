@@ -53,42 +53,66 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
         prompt_override=args.prompt_override,
     )
     df = pd.read_csv(parsed_csv)
-    predicted_images = []
-    llm_predictions = []
-    confidences = []
-    for i, row in df.iterrows():
-        images = row.get("images", "[]")
-        try:
-            images_list = (
-                ast.literal_eval(images) if isinstance(images, str) else images
-            )
-        except Exception:
-            images_list = []
-        if not images_list:
-            predicted_images.append("")
-            llm_predictions.append("")
-            confidences.append("")
-            continue
-        try:
-            pred_img, conf = picker.do_inference(images_list)
-            predicted_images.append(pred_img)
-            confidences.append(conf)
-            logging.info(f"Predicted image: {pred_img} | Confidence: {conf:.4f}")
-        except Exception as e:
-            logging.warning(f"Picker error: {e}")
-            predicted_images.append(images_list[0])
-            confidences.append("")
-        try:
-            llm_pred = llm(predicted_images[-1])
-            llm_predictions.append(llm_pred)
-        except Exception as e:
-            logging.warning(f"LLM error: {e}")
-            llm_predictions.append("")
-    df["predicted_image"] = predicted_images
-    df["confidence"] = confidences
-    df["llm_prediction"] = llm_predictions
-    df.to_csv(args.save_file_name + ".csv", index=False)
-    logging.info(f"Inference results saved to {args.save_file_name}.csv")
+    result_path = args.save_file_name + ".csv"
+    if os.path.exists(result_path):
+        df_result = pd.read_csv(result_path)
+        processed_mask = df_result.get("predicted_image", "").astype(str).str.len() > 0
+        predicted_images = df_result.get("predicted_image", [""] * len(df)).tolist()
+        confidences = df_result.get("confidence", [""] * len(df)).tolist()
+        llm_predictions = df_result.get("llm_prediction", [""] * len(df)).tolist()
+        logging.info(f"Продолжаем инференс с {sum(processed_mask)} обработанных строк")
+    else:
+        predicted_images = [""] * len(df)
+        confidences = [""] * len(df)
+        llm_predictions = [""] * len(df)
+        processed_mask = pd.Series([False] * len(df))
+        chunk_size = 10
+        for i, row in df.iterrows():
+            if processed_mask[i]:
+                continue  # уже обработано
+            images = row.get("images", "[]")
+            try:
+                images_list = (
+                    ast.literal_eval(images) if isinstance(images, str) else images
+                )
+            except Exception:
+                images_list = []
+            if not images_list:
+                predicted_images[i] = ""
+                llm_predictions[i] = ""
+                confidences[i] = ""
+                continue
+            try:
+                pred_img, conf = picker.do_inference(images_list)
+                predicted_images[i] = pred_img
+                confidences[i] = conf
+                logging.info(f"Predicted image: {pred_img} | Confidence: {conf:.4f}")
+            except Exception as e:
+                logging.warning(f"Picker error: {e}")
+                predicted_images[i] = images_list[0]
+                confidences[i] = ""
+            try:
+                llm_pred = llm(predicted_images[i])
+                llm_predictions[i] = llm_pred
+            except Exception as e:
+                logging.warning(f"LLM error: {e}")
+                llm_predictions[i] = ""
+            if (i + 1) % chunk_size == 0:
+                temp_df = df.copy()
+                temp_df["predicted_image"] = predicted_images
+                temp_df["confidence"] = confidences
+                temp_df["llm_prediction"] = llm_predictions
+                temp_df.to_csv(result_path, index=False)
+                logging.info(
+                    f"[Inference] Промежуточные результаты сохранены в {result_path}"
+                )
+        # Финальный результат, если не делится на chunk_size
+        temp_df = df.copy()
+        temp_df["predicted_image"] = predicted_images
+        temp_df["confidence"] = confidences
+        temp_df["llm_prediction"] = llm_predictions
+        temp_df.to_csv(result_path, index=False)
+    logging.info(f"[Inference] Финальные результаты сохранены в {result_path}")
 
 
 def parse_args():
@@ -97,7 +121,6 @@ def parse_args():
     parser.add_argument(
         "--max-links", type=int, default=90, help="Max product links to collect"
     )
-    # остальные аргументы игнорируем, чтобы не мешали запуску
     args, _ = parser.parse_known_args()
     return args
 
