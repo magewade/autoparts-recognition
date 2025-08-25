@@ -18,54 +18,43 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-DEFAULT_PROMPT = """Identify the VAG (Volkswagen Audi Group) part number from the photo using this comprehensive algorithm:
+DEFAULT_PROMPT = """
+Identify the most likely model or part number from the photo of any automotive part, using the following universal algorithm:
+
 1. **Scan the Image Thoroughly:**
-   - Examine all text and numbers in the image, focusing on labels, stickers, or embossed areas.
-   - Pay special attention to the upper part of labels, areas near barcodes, and any prominent alphanumeric sequences.
-2. **Understand Detailed VAG Part Number Structure:**
-   - Total length: Typically 11-13 characters (including spaces or hyphens)
-   - Format: [First Number] [Middle Number] [Final Number] [Index] [Software Variant]
-   
-   Example: 5K0 937 087 AC Z15
-   
-   Detailed Breakdown:
-   a) First Number (3 characters):
-      - First two digits: Vehicle type (e.g., 3D = Phaeton, 1J = Golf IV, 8L = Audi A3)
-      - Third digit: Body shape or variant
-        0 = general, 1 = left-hand drive, 2 = right-hand drive, 3 = two-door, 4 = four-door,
-        5 = notchback, 6 = hatchback, 7 = special shape, 8 = coupe, 9 = variant
-   b) Middle Number (3 digits):
-      - First digit: Main group (e.g., 1 = engine, 2 = fuel/exhaust, 3 = transmission, 4 = front axle, 5 = rear axle)
-      - Last two digits: Subgroup within the main group
-   c) Final Number (3 digits):
-      - Identifies specific part within subgroup
-      - Odd numbers often indicate left parts, even numbers right parts
-   d) Index (1-2 LETTERS): Identifies variants, revisions, or colors
-   e) Software Variant (2-3 characters): Often starts with Z (e.g., Z15, Z4)
-3. **Identify and Verify with Precision:**
-   - The first three parts (First, Middle, Final Numbers) are crucial and must be present.
-   - Index and Software Variant may not always be visible or applicable.
-   - Check for consistency with known vehicle types and component groups.
-4. **Navigate Common Pitfalls and Special Cases:**
-   - Character Confusion:
-     '1' vs 'I', '0' vs 'O', '8' vs 'B', '5' vs 'S', '2' vs 'Z'
-   - Upside-down numbers: Be vigilant for numbers that make sense when flipped.
-   - Standard parts: May start with 9xx.xxx or 052.xxx
-   - Exchange parts: Often marked with an 'X'
-   - Color codes: e.g., GRU for primed parts requiring painting
-5. **Context-Based Verification:**
-   - Consider the part's apparent function in relation to its number.
-   - Check for consistency with visible vehicle model or component type.
-   - Look for supporting information like manufacturer logos or additional part descriptors.
-Provide the response in this format:
-- Valid part number identified: `<START> [VAG Part Number] <END>`
-- No valid number found: `<START> NONE <END>`
-Include spaces between number segments as shown in the example structure above.
-If there are multiple numbers in the image, please identify the one that is most likely to be the correct part number.
+    - Examine all visible text, numbers, barcodes, and labels in the image.
+    - Focus on stickers, embossed/engraved areas, and prominent alphanumeric sequences.
+    - Pay special attention to numbers near brand names, barcodes, or in bold/large font.
+
+2. **Understand Brand and Format Diversity:**
+    - The part/model number may follow different formats depending on the brand (e.g., Toyota, Audi, Bosch, Denso, etc.).
+    - Typical identifiers are 8–15 characters, often a mix of letters and digits, sometimes with hyphens or spaces.
+    - If the brand is visible, prefer numbers that match known formats for that brand (if you know them).
+    - If no brand is visible, select the most prominent, structured number.
+
+3. **Selection Rules:**
+    - If multiple candidates exist, choose the one that is:
+      - Closest to the brand name or logo (if present)
+      - In bold or larger font
+      - Most structured (e.g., contains both letters and digits, or matches a known pattern)
+    - If all candidates are equally likely, pick the first one (top-to-bottom, left-to-right).
+    - If no plausible number is found, return NONE.
+
+4. **Common Pitfalls:**
+    - Be careful with character confusion: '1' vs 'I', '0' vs 'O', '8' vs 'B', '5' vs 'S', '2' vs 'Z'.
+    - Ignore numbers that are clearly dates, serials, or batch codes unless no other candidates exist.
+    - If the only visible identifier is a long string (e.g., 16+ characters) or a barcode, extract the most plausible substring.
+
+5. **Contextual Verification:**
+    - Consider the part's function and any visible brand/model context.
+    - If the part is from a well-known brand, try to match the number to typical formats for that brand.
+    - If the part is generic or the brand is unknown, select the most prominent number.
 
 **Response Format:**
-- If a part number is identified: `<START> [Toyota Part Number] <END>`
+- If a model/part number is identified: `<START> [Model/Part Number] <END>`
 - If no valid number is identified: `<START> NONE <END>`
+
+If there are multiple numbers, return only the one that is most likely to be the main identifier for this part.
 """
 
 
@@ -317,7 +306,7 @@ class GeminiInference:
                 self.reset_incorrect_predictions()
                 return "nan | nan | nan | True"
 
-            # Если хоть какой-то номер найден в presumptive_model_number (3-е поле не nan)
+            # Если хоть какой-то номер найден в presumptive_model_number
             try:
                 presumptive = extracted_number.split("|")[2].strip()
             except Exception:
