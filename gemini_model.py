@@ -14,7 +14,9 @@ import re
 import io
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 DEFAULT_PROMPT = """Identify the VAG (Volkswagen Audi Group) part number from the photo using this comprehensive algorithm:
 1. **Scan the Image Thoroughly:**
@@ -66,15 +68,24 @@ If there are multiple numbers in the image, please identify the one that is most
 - If no valid number is identified: `<START> NONE <END>`
 """
 
-class GeminiInference():
-    def __init__(self, api_keys, model_name='gemini-1.5-flash', car_brand=None, prompt_override=None):
+
+class GeminiInference:
+    def __init__(
+        self,
+        api_keys,
+        model_name="gemini-1.5-flash",
+        car_brand=None,
+        prompt_override=None,
+    ):
         self.api_keys = api_keys
         self.current_key_index = 0
         self.car_brand = car_brand.lower() if car_brand else None
         self.prompts = self.load_prompts()
 
         # Используем override, если он задан, иначе берем из prompts.json или дефолт
-        base_prompt = self.prompts.get(self.car_brand, {}).get('main_prompt', DEFAULT_PROMPT)
+        base_prompt = self.prompts.get(self.car_brand, {}).get(
+            "main_prompt", DEFAULT_PROMPT
+        )
         if prompt_override:
             self.system_prompt = prompt_override.strip() + "\n\n" + base_prompt
         else:
@@ -82,38 +93,34 @@ class GeminiInference():
 
         self.configure_api()
         generation_config = {
-        "temperature": 1,
-        "top_p": 1,
-        "top_k": 32,
-        "max_output_tokens": 8192,
-    }
+            "temperature": 1,
+            "top_p": 1,
+            "top_k": 32,
+            "max_output_tokens": 8192,
+        }
         safety_settings = [
-        {
-            "category": "HARM_CATEGORY_HARASSMENT",
-            "threshold": "BLOCK_ONLY_HIGH"
-        },
-        {
-            "category": "HARM_CATEGORY_HATE_SPEECH",
-            "threshold": "BLOCK_ONLY_HIGH"
-        },
-        {
-            "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            "threshold": "BLOCK_ONLY_HIGH"
-        },
-        {
-            "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-            "threshold": "BLOCK_ONLY_HIGH"
-        },
-    ]
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+            {
+                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "threshold": "BLOCK_ONLY_HIGH",
+            },
+            {
+                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "threshold": "BLOCK_ONLY_HIGH",
+            },
+        ]
 
-        self.system_prompt = self.prompts.get(self.car_brand, {}).get('main_prompt', DEFAULT_PROMPT)
+        self.system_prompt = self.prompts.get(self.car_brand, {}).get(
+            "main_prompt", DEFAULT_PROMPT
+        )
 
         self.model = genai.GenerativeModel(
-        model_name=model_name,
-        generation_config=generation_config,
-        safety_settings=safety_settings,
-        system_instruction=self.system_prompt
-    )
+            model_name=model_name,
+            generation_config=generation_config,
+            safety_settings=safety_settings,
+            system_instruction=self.system_prompt,
+        )
 
         self.validator_model = self.create_validator_model(model_name)
         self.incorrect_predictions = []
@@ -121,7 +128,7 @@ class GeminiInference():
 
     def load_prompts(self):
         try:
-            with open('prompts.json', 'r') as f:
+            with open("prompts.json", "r") as f:
                 return json.load(f)
         except FileNotFoundError:
             logging.warning("prompts.json not found. Using default prompts.")
@@ -139,32 +146,28 @@ class GeminiInference():
         genai.configure(api_key=self.api_keys[self.current_key_index])
 
         generation_config = {
-        "temperature": 1,
-        "top_p": 1,
-        "top_k": 32,
-        "max_output_tokens": 8192,
-    }
+            "temperature": 1,
+            "top_p": 1,
+            "top_k": 32,
+            "max_output_tokens": 8192,
+        }
         safety_settings = [
-        {
-            "category": "HARM_CATEGORY_HARASSMENT",
-            "threshold": "BLOCK_ONLY_HIGH"
-        },
-        {
-            "category": "HARM_CATEGORY_HATE_SPEECH",
-            "threshold": "BLOCK_ONLY_HIGH"
-        },
-        {
-            "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            "threshold": "BLOCK_ONLY_HIGH"
-        },
-        {
-            "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-            "threshold": "BLOCK_ONLY_HIGH"
-        },
-    ]
-        return genai.GenerativeModel(model_name=model_name,
-                                 generation_config=generation_config,
-                                 safety_settings=safety_settings)
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+            {
+                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "threshold": "BLOCK_ONLY_HIGH",
+            },
+            {
+                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "threshold": "BLOCK_ONLY_HIGH",
+            },
+        ]
+        return genai.GenerativeModel(
+            model_name=model_name,
+            generation_config=generation_config,
+            safety_settings=safety_settings,
+        )
 
     def get_response(self, img_data, retry=False):
         max_retries = 10
@@ -173,17 +176,25 @@ class GeminiInference():
         for attempt in range(max_retries):
             try:
                 image_parts = [
-                {
-                    "inline_data": {
-                        "mime_type": "image/jpeg",
-                        "data": img_data.getvalue() if isinstance(img_data, io.BytesIO) else img_data.read_bytes()
-                    }
-                },
-            ]
+                    {
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": (
+                                img_data.getvalue()
+                                if isinstance(img_data, io.BytesIO)
+                                else img_data.read_bytes()
+                            ),
+                        }
+                    },
+                ]
 
-                prompt_parts = [] if not retry else [
-                "It is not correct. Try again. Look for the numbers that are highly VAG number"
-            ]
+                prompt_parts = (
+                    []
+                    if not retry
+                    else [
+                        "It is not correct. Try again. Look for the numbers that are highly VAG number"
+                    ]
+                )
 
                 full_prompt = image_parts + prompt_parts
 
@@ -201,11 +212,13 @@ class GeminiInference():
 
             except Exception as e:
                 if "quota" in str(e).lower():
-                    delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                    delay = base_delay * (2**attempt) + random.uniform(0, 1)
                     if delay > 300:
                         self.switch_api_key()
                         delay = base_delay
-                    logging.warning(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
+                    logging.warning(
+                        f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds..."
+                    )
                     time.sleep(delay)
                 else:
                     logging.error(f"Error in get_response: {str(e)}")
@@ -215,8 +228,11 @@ class GeminiInference():
         raise Exception("Max retries reached. Unable to get a response.")
 
     def format_part_number(self, number):
-        if self.car_brand == 'audi' and re.match(r'^[A-Z0-9]{3}[0-9]{3}[0-9]{3,5}[A-Z]?$', number.replace(' ', '').replace('-', '')):
-            number = number.replace('-', '').replace(' ', '')
+        if self.car_brand == "audi" and re.match(
+            r"^[A-Z0-9]{3}[0-9]{3}[0-9]{3,5}[A-Z]?$",
+            number.replace(" ", "").replace("-", ""),
+        ):
+            number = number.replace("-", "").replace(" ", "")
 
             formatted_number = f"{number[:3]} {number[3:6]} {number[6:9]}"
 
@@ -228,7 +244,7 @@ class GeminiInference():
             return number
 
     def extract_number(self, response):
-        number = response.split('<START>')[-1].split("<END>")[0].strip()
+        number = response.split("<START>")[-1].split("<END>")[0].strip()
         if number.upper() != "NONE":
             return self.format_part_number(number)
         return number
@@ -239,22 +255,31 @@ class GeminiInference():
         formatted_number = self.format_part_number(extracted_number)
 
         image_parts = [
-        {
-            "inline_data": {
-                "mime_type": "image/jpeg",
-                "data": img_data.getvalue() if isinstance(img_data, io.BytesIO) else img_data.read_bytes()
-            }
-        },
-    ]
+            {
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": (
+                        img_data.getvalue()
+                        if isinstance(img_data, io.BytesIO)
+                        else img_data.read_bytes()
+                    ),
+                }
+            },
+        ]
 
-        validation_prompt = self.prompts.get(self.car_brand, {}).get('validation_prompt', "")
+        validation_prompt = self.prompts.get(self.car_brand, {}).get(
+            "validation_prompt", ""
+        )
         incorrect_predictions_str = ", ".join(self.incorrect_predictions)
-        prompt = validation_prompt.format(extracted_number=extracted_number, incorrect_predictions=incorrect_predictions_str)
+        prompt = validation_prompt.format(
+            extracted_number=extracted_number,
+            incorrect_predictions=incorrect_predictions_str,
+        )
 
         prompt_parts = [
-        image_parts[0],
-        prompt,
-    ]
+            image_parts[0],
+            prompt,
+        ]
 
         response = self.validator_model.generate_content(prompt_parts)
 
@@ -268,7 +293,7 @@ class GeminiInference():
     def __call__(self, image_path):
         self.configure_api()
 
-        if image_path.startswith('http'):
+        if image_path.startswith("http"):
             response = requests.get(image_path, stream=True)
             img_data = io.BytesIO(response.content)
         else:
@@ -285,29 +310,32 @@ class GeminiInference():
             extracted_number = self.extract_number(answer)
 
             logging.info(f"Attempt {attempt + 1}: Extracted number: {extracted_number}")
-            
+
+            # Если LLM вернул специальный маркер о множестве номеров
             if extracted_number.strip().endswith("| True"):
                 logging.warning("Multiple numbers detected, returning special marker.")
                 self.reset_incorrect_predictions()
                 return "nan | nan | nan | True"
 
-            if extracted_number.upper() != "NONE":
-                validation_result = self.validate_number(extracted_number, img_data)
-                if "<VALID>" in validation_result:
-                    logging.info(f"Valid number found: {extracted_number}")
-                    self.reset_incorrect_predictions()
-                    return extracted_number
-                else:
-                    logging.warning(f"Validation failed: {validation_result}")
-                    self.incorrect_predictions.append(extracted_number)
-                    if attempt < max_attempts - 1:
-                        logging.info(f"Attempting to find another number (Attempt {attempt + 2}/{max_attempts})")
-            else:
-                logging.warning(f"No number found in attempt {attempt + 1}")
-                if attempt < max_attempts - 1:
-                    logging.info(f"Attempting to find another number (Attempt {attempt + 2}/{max_attempts})")
+            # Если хоть какой-то номер найден в presumptive_model_number (3-е поле не nan)
+            try:
+                presumptive = extracted_number.split("|")[2].strip()
+            except Exception:
+                presumptive = ""
+            if presumptive and presumptive.lower() != "nan":
+                logging.info(
+                    f"Presumptive model number found: {presumptive}, accepting as valid result."
+                )
+                self.reset_incorrect_predictions()
+                return extracted_number
 
-        logging.warning("All attempts failed. Returning NONE.")
+            # Если ничего не найдено, пробуем дальше
+            if attempt < max_attempts - 1:
+                logging.info(
+                    f"No valid number found in attempt {attempt + 1}, retrying..."
+                )
+
+        logging.warning("All attempts failed or only nan found.")
         self.reset_incorrect_predictions()
         # Возвращаем всегда 4 поля, если ничего не найдено
         return "nan | nan | nan | False"
