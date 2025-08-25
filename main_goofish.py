@@ -148,16 +148,22 @@ def encode(
         ]
     # Логируем уверенность для каждой картинки
     for i in images_probs:
-        logging.info(f"Картинка: {i['image_link']} — уверенность: {i['score']*100:.1f}%")
+        logging.info(
+            f"Картинка: {i['image_link']} — уверенность: {i['score']*100:.1f}%"
+        )
     detail_number = "none"
     target_image_link = None
     for target_image_link, score in [
         (i["image_link"], i["score"]) for i in images_probs
     ]:
         try:
-            logging.info(f"Модель предсказывает по картинке: {target_image_link} (уверенность {score*100:.1f}%)")
+            logging.info(
+                f"Модель предсказывает по картинке: {target_image_link} (уверенность {score*100:.1f}%)"
+            )
             detail_number = str(model(target_image_link))
-            logging.info(f"Картинка {target_image_link} — предсказан номер: {detail_number}")
+            logging.info(
+                f"Картинка {target_image_link} — предсказан номер: {detail_number}"
+            )
             if detail_number.lower().strip() != "none":
                 break
         except Exception as e:
@@ -220,8 +226,8 @@ def reduce(
         url = str(row.get("url", ""))
         if url in processed_urls:
             continue
-    price = row.get("price", "N/A")
-    logging.info(f"Найдена цена: {price}")
+        price = row.get("price", "N/A")
+        logging.info(f"Найдена цена: {price}")
         images = row.get("images", "")
         images_list = [img for img in str(images).split(",") if img]
         try:
@@ -249,6 +255,8 @@ def reduce(
             pd.DataFrame(result).to_excel(f"{savename}.xlsx", index=False)
         except Exception as e:
             logging.warning(f"Could not save progress: {e}")
+
+
     return result
 
 
