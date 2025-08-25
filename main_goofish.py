@@ -1,3 +1,47 @@
+import ast
+
+
+def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.csv"):
+    from picker_model import TargetModel
+    from gemini_model import GeminiInference
+    import pandas as pd
+    import logging
+
+    picker = TargetModel()
+    llm = GeminiInference()
+    df = pd.read_csv(parsed_csv)
+    predicted_images = []
+    llm_predictions = []
+    for i, row in df.iterrows():
+        images = row.get("images", "[]")
+        try:
+            images_list = (
+                ast.literal_eval(images) if isinstance(images, str) else images
+            )
+        except Exception:
+            images_list = []
+        if not images_list:
+            predicted_images.append("")
+            llm_predictions.append("")
+            continue
+        try:
+            pred = picker.do_inference(images_list)
+            predicted_images.append(pred)
+        except Exception as e:
+            logging.warning(f"Picker error: {e}")
+            predicted_images.append(images_list[0])
+        try:
+            llm_pred = llm(predicted_images[-1])
+            llm_predictions.append(llm_pred)
+        except Exception as e:
+            logging.warning(f"LLM error: {e}")
+            llm_predictions.append("")
+    df["predicted_image"] = predicted_images
+    df["llm_prediction"] = llm_predictions
+    df.to_csv(output_csv, index=False)
+    logging.info(f"Inference results saved to {output_csv}")
+
+
 # --- SIMPLE TWO-STAGE PIPELINE: 1) LINKS, 2) IMAGES+PRICE ---
 import logging
 import pandas as pd
@@ -80,3 +124,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.csv")
