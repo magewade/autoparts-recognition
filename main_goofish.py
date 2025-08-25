@@ -94,10 +94,7 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
             llm_pred = ""
             for attempt in range(2):
                 try:
-                    prompt_override = None
-                    if attempt == 1:
-                        prompt_override = "It is not correct. Try again. Look for the numbers that are highly VAG number."
-                    llm_pred = llm(predicted_images[i], prompt_override=prompt_override)
+                    llm_pred = llm(predicted_images[i])
                     if (
                         not llm_pred
                         or "nan" in str(llm_pred).lower()
