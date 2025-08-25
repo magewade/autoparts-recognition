@@ -105,38 +105,45 @@ def parse_args():
 def main():
     args = parse_args()
     cfg = Config
-    processor = Processor(image_size=(512, 512), batch_size=32)
-    driver = processor.create_persistent_driver()
-    try:
-        links = processor.collect_product_links_selenium(
-            driver,
-            max_steps=args.max_steps,
-            max_links=args.max_links,
-        )
-        # Ограничиваем список ссылок до max_links, если их больше
-        if len(links) > args.max_links:
-            links = links[: args.max_links]
-        processor.save_product_links_to_csv(links, filename="product_links.csv")
-    finally:
-        processor.close_persistent_driver(driver)
-
-    df_links = pd.read_csv("product_links.csv")
-    if "href" in df_links.columns:
-        df_for_parse = pd.DataFrame({"href": df_links["href"]})
-    elif "url" in df_links.columns:
-        df_for_parse = pd.DataFrame({"href": df_links["url"]})
+    # 1. Сбор product_links.csv (если нет)
+    if not os.path.exists("product_links.csv"):
+        processor = Processor(image_size=(512, 512), batch_size=32)
+        driver = processor.create_persistent_driver()
+        try:
+            links = processor.collect_product_links_selenium(
+                driver,
+                max_steps=args.max_steps,
+                max_links=args.max_links,
+            )
+            if len(links) > args.max_links:
+                links = links[: args.max_links]
+            processor.save_product_links_to_csv(links, filename="product_links.csv")
+        finally:
+            processor.close_persistent_driver(driver)
+        logging.info("product_links.csv сформирован")
     else:
-        raise Exception("No href/url column in product_links.csv")
+        logging.info("product_links.csv найден, пропускаем сбор ссылок")
 
-    parser = GoofishParserPlaywrightAsync()
-    import asyncio
+    # 2. Сбор parsed_products.csv (если нет)
+    if not os.path.exists("parsed_products.csv"):
+        df_links = pd.read_csv("product_links.csv")
+        if "href" in df_links.columns:
+            df_for_parse = pd.DataFrame({"href": df_links["href"]})
+        elif "url" in df_links.columns:
+            df_for_parse = pd.DataFrame({"href": df_links["url"]})
+        else:
+            raise Exception("No href/url column in product_links.csv")
+        parser = GoofishParserPlaywrightAsync()
+        import asyncio
 
-    df_result = asyncio.run(
-        enrich_dataframe_playwright_async(
-            df_for_parse, parser, output_path="parsed_products.csv", chunk_size=10
+        df_result = asyncio.run(
+            enrich_dataframe_playwright_async(
+                df_for_parse, parser, output_path="parsed_products.csv", chunk_size=10
+            )
         )
-    )
-    logging.info("parsed_products.csv сформирован")
+        logging.info("parsed_products.csv сформирован")
+    else:
+        logging.info("parsed_products.csv найден, пропускаем парсинг Playwright")
 
 
 if __name__ == "__main__":
