@@ -147,8 +147,50 @@ def main():
     else:
         logging.info("product_links.csv найден, пропускаем сбор ссылок")
 
-    # 2. Сбор parsed_products.csv (если нет)
-    if not os.path.exists("parsed_products.csv"):
+    # 2. Сбор parsed_products.csv (если нет или есть неполные строки)
+    need_parse = True
+    if os.path.exists("parsed_products.csv"):
+        df_parsed = pd.read_csv("parsed_products.csv")
+        # Проверяем, есть ли строки без картинок или цены
+        empty_mask = (
+            df_parsed["images"].isnull()
+            | (df_parsed["images"].astype(str) == "[]")
+            | df_parsed["images"].astype(str).str.strip().eq("")
+            | df_parsed["price"].isnull()
+            | (df_parsed["price"].astype(str).str.strip() == "")
+            | (df_parsed["price"].astype(str) == "N/A")
+        )
+        if not empty_mask.any():
+            need_parse = False
+            logging.info(
+                "parsed_products.csv найден и все строки заполнены, пропускаем парсинг Playwright"
+            )
+        else:
+            logging.info(
+                f"parsed_products.csv найден, но есть {empty_mask.sum()} незаполненных строк — допарсим их"
+            )
+            df_links = pd.read_csv("product_links.csv")
+            if "href" in df_links.columns:
+                df_for_parse = pd.DataFrame({"href": df_links["href"]})
+            elif "url" in df_links.columns:
+                df_for_parse = pd.DataFrame({"href": df_links["url"]})
+            else:
+                raise Exception("No href/url column in product_links.csv")
+            parser = GoofishParserPlaywrightAsync()
+            import asyncio
+
+            # Парсим только незаполненные строки
+            df_for_parse = df_for_parse.iloc[empty_mask[empty_mask].index]
+            df_result = asyncio.run(
+                enrich_dataframe_playwright_async(
+                    df_for_parse,
+                    parser,
+                    output_path="parsed_products.csv",
+                    chunk_size=10,
+                )
+            )
+            logging.info("parsed_products.csv дополнен незаполненными строками")
+    if need_parse:
         df_links = pd.read_csv("product_links.csv")
         if "href" in df_links.columns:
             df_for_parse = pd.DataFrame({"href": df_links["href"]})
@@ -165,8 +207,6 @@ def main():
             )
         )
         logging.info("parsed_products.csv сформирован")
-    else:
-        logging.info("parsed_products.csv найден, пропускаем парсинг Playwright")
 
 
 if __name__ == "__main__":
