@@ -40,6 +40,13 @@ logging.basicConfig(
 
 
 # --- Playwright Async Parser ---
+
+# --- Playwright Async Parser ---
+import pandas as pd
+from tqdm.asyncio import tqdm_asyncio
+from pathlib import Path
+
+
 class GoofishParserPlaywrightAsync:
     def __init__(self):
         self.headers_list = [
@@ -89,6 +96,57 @@ class GoofishParserPlaywrightAsync:
         )
         price = price_tag.text.strip() if price_tag else "N/A"
         return {"price": price}
+
+
+# --- Async DataFrame Enrichment ---
+async def enrich_dataframe_playwright_async(
+    df, parser, output_path="results.csv", chunk_size=10
+):
+    prices = []
+    images_all = []
+    output_path = Path(output_path)
+    if output_path.exists():
+        output_path.unlink()
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(
+            user_agent=random.choice(parser.headers_list)["User-Agent"]
+        )
+        page = await context.new_page()
+        for i, row in tqdm_asyncio(
+            df.iterrows(), total=len(df), desc="Парсинг товаров"
+        ):
+            url = row["href"]
+            print(f"[Main] Обрабатываем {url}")
+            try:
+                imgs = await parser.parse_big_images(url, page)
+                print(f"[Main] Собрано {len(imgs)} картинок")
+            except Exception as e:
+                print(f"[Error] Не удалось собрать картинки: {e}")
+                imgs = []
+            images_all.append(imgs)
+            try:
+                product_info = await parser.load_product_info(url, page)
+                price = product_info.get("price", "N/A")
+                print(f"[Main] Цена: {price}")
+            except Exception as e:
+                print(f"[Error] Не удалось загрузить цену: {e}")
+                price = "N/A"
+            prices.append(price)
+            await asyncio.sleep(random.uniform(2, 5))
+            if (i + 1) % chunk_size == 0:
+                temp_df = df.iloc[: i + 1].copy()
+                temp_df["price"] = prices
+                temp_df["images"] = images_all
+                temp_df.to_csv(output_path, index=False)
+                print(f"[Info] Промежуточные результаты записаны в {output_path}")
+        temp_df = df.copy()
+        temp_df["price"] = prices
+        temp_df["images"] = images_all
+        temp_df.to_csv(output_path, index=False)
+        print(f"[Info] Все результаты записаны в {output_path}")
+        await browser.close()
+    return pd.read_csv(output_path)
 
 
 def create_chrome_driver(user_agent=None, debug_port=None):
