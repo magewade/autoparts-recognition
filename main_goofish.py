@@ -161,7 +161,7 @@ def main():
             )
         else:
             logging.info(
-                f"parsed_products.csv найден, обработано {n_parsed} из {n_links} — допарсим оставшиеся"
+                f"parsed_products.csv найден, обработано {n_parsed} из {n_links}"
             )
             if "href" in df_links.columns:
                 df_for_parse = pd.DataFrame({"href": df_links["href"]})
@@ -203,4 +203,25 @@ def main():
 
 if __name__ == "__main__":
     main()
-    run_inference(parsed_csv="parsed_products.csv")
+    parsed_csv = "parsed_products.csv"
+    output_csv = "final_products.csv"
+    if os.path.exists(parsed_csv):
+        df_parsed = pd.read_csv(parsed_csv)
+        n_parsed = len(df_parsed)
+        if os.path.exists(output_csv):
+            df_final = pd.read_csv(output_csv)
+            n_final = len(df_final)
+            if n_final >= n_parsed:
+                logging.info(
+                    "final_products.csv найден и все строки обработаны, пропускаем инференс"
+                )
+            else:
+                logging.info(
+                    f"final_products.csv найден, обработано {n_final} из {n_parsed} — доинференсим оставшиеся"
+                )
+                # Запуск инференса только для недостающих строк
+                run_inference(parsed_csv=parsed_csv, output_csv=output_csv)
+        else:
+            run_inference(parsed_csv=parsed_csv, output_csv=output_csv)
+    else:
+        logging.warning("parsed_products.csv не найден, инференс невозможен")
