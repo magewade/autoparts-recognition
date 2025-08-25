@@ -130,6 +130,7 @@ def encode(
     url: str, images: list, price: str, picker: TargetModel, model: GeminiInference
 ) -> dict:
     logging.info(f"Processing url: {url}")
+    logging.info(f"Найдено картинок: {len(images)}")
     if not images or images == [""]:
         return {
             "predicted_number": "NO_IMAGES",
@@ -145,14 +146,18 @@ def encode(
         images_probs = [
             {"image_link": img, "score": 1.0 / len(images)} for img in images
         ]
+    # Логируем уверенность для каждой картинки
+    for i in images_probs:
+        logging.info(f"Картинка: {i['image_link']} — уверенность: {i['score']*100:.1f}%")
     detail_number = "none"
     target_image_link = None
     for target_image_link, score in [
         (i["image_link"], i["score"]) for i in images_probs
     ]:
         try:
-            logging.info(f"Predicting on image {target_image_link} with score {score}")
+            logging.info(f"Модель предсказывает по картинке: {target_image_link} (уверенность {score*100:.1f}%)")
             detail_number = str(model(target_image_link))
+            logging.info(f"Картинка {target_image_link} — предсказан номер: {detail_number}")
             if detail_number.lower().strip() != "none":
                 break
         except Exception as e:
@@ -215,7 +220,8 @@ def reduce(
         url = str(row.get("url", ""))
         if url in processed_urls:
             continue
-        price = row.get("price", "N/A")
+    price = row.get("price", "N/A")
+    logging.info(f"Найдена цена: {price}")
         images = row.get("images", "")
         images_list = [img for img in str(images).split(",") if img]
         try:
@@ -336,14 +342,10 @@ if __name__ == "__main__":
     picker = TargetModel()
     logging.info(f"Starting encoding process with model: {model_name}")
     encoding_result = reduce(
-        additional_data["main_link"],
         picker=picker,
         model=model,
-        processor=processor,
-        ignore_error=additional_data["ignore_error"],
-        max_steps=additional_data["max_steps"],
-        max_links=additional_data["max_links"],
         savename=additional_data["savename"],
+        parsed_csv="parsed_products.csv",
     )
     try:
         pd.DataFrame(encoding_result).to_excel(
