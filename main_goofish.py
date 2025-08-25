@@ -256,13 +256,12 @@ def reduce(
         except Exception as e:
             logging.warning(f"Could not save progress: {e}")
 
-
     return result
 
 
 if __name__ == "__main__":
 
-    # 1. Сбор ссылок
+    # 1. Сбор ссылок — product_links.csv
     _, _, additional_data = parse_args()
     processor = Processor(image_size=(512, 512), batch_size=32)
     driver = processor.create_persistent_driver()
@@ -276,7 +275,7 @@ if __name__ == "__main__":
     finally:
         processor.close_persistent_driver(driver)
 
-    # 2. Playwright: обработка карточек батчами по 10, сохранение в parsed_products.csv
+    # 2. Playwright: product_links.csv -> parsed_products.csv
     import pandas as pd
     import asyncio
     from dataprocessor_goofish import GoofishParserPlaywrightAsync
@@ -288,14 +287,12 @@ if __name__ == "__main__":
         from playwright.async_api import async_playwright
         import csv
 
-        # Заголовки для CSV
+        if os.path.exists(output_csv):
+            os.remove(output_csv)
         fieldnames = ["url", "images", "price"]
-        # Если файл не существует — пишем заголовки
-        if not os.path.exists(output_csv):
-            with open(output_csv, mode="w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-
+        with open(output_csv, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
@@ -317,24 +314,21 @@ if __name__ == "__main__":
                         results.append(
                             {"url": url, "images": "ERROR", "price": "ERROR"}
                         )
-                # Сохраняем батч
                 with open(output_csv, mode="a", newline="", encoding="utf-8") as f:
                     writer = csv.DictWriter(f, fieldnames=fieldnames)
                     for row in results:
                         writer.writerow(row)
             await browser.close()
 
-    # Читаем ссылки из product_links.csv (берём только href)
     df_links = pd.read_csv("product_links.csv")
     card_links = df_links["href"].dropna().unique().tolist()
-    # Запускаем Playwright обработку
     asyncio.run(
         process_links_playwright(
             card_links, batch_size=10, output_csv="parsed_products.csv"
         )
     )
 
-    # 3. Запуск старого пайплайна
+    # 3. Инференс: parsed_products.csv -> final_products.csv
     model_name, api_keys, additional_data = parse_args()
     assert model_name in ["gemini"], "There is no available model you're looking for"
     if model_name == "gemini":
@@ -349,19 +343,25 @@ if __name__ == "__main__":
     processor = Processor(image_size=(512, 512), batch_size=32)
     picker = TargetModel()
     logging.info(f"Starting encoding process with model: {model_name}")
-    encoding_result = reduce(
-        picker=picker,
-        model=model,
-        savename=additional_data["savename"],
-        parsed_csv="parsed_products.csv",
-    )
-    try:
-        pd.DataFrame(encoding_result).to_excel(
-            f"{additional_data['savename']}.xlsx", index=False
-        )
-        logging.info(f"Final results saved to {additional_data['savename']}.xlsx")
-    except Exception as e:
-        logging.error(f"Error saving to Excel: {e}. Saving in pickle format instead.")
-        with open(f'{additional_data["savename"]}.pkl', "wb") as f:
-            pickle.dump(encoding_result, f)
-        logging.info(f"Final results saved to {additional_data['savename']}.pkl")
+    # Читаем parsed_products.csv, добавляем новые колонки и сохраняем final_products.csv
+    df = pd.read_csv("parsed_products.csv")
+    new_cols = ["predicted_number", "correct_image_link"]
+    df[new_cols[0]] = ""
+    df[new_cols[1]] = ""
+    for i, row in df.iterrows():
+        url = row.get("url", "")
+        price = row.get("price", "N/A")
+        images = row.get("images", "")
+        images_list = [img for img in str(images).split(",") if img]
+        try:
+            encoded_data = encode(url, images_list, price, picker, model)
+        except Exception as e:
+            logging.error(f"Error processing row {i} ({url}): {e}")
+            encoded_data = {
+                "predicted_number": "ERROR",
+                "correct_image_link": "N/A",
+            }
+        df.at[i, "predicted_number"] = encoded_data["predicted_number"]
+        df.at[i, "correct_image_link"] = encoded_data["correct_image_link"]
+    df.to_csv("final_products.csv", index=False)
+    logging.info("Final results saved to final_products.csv")
