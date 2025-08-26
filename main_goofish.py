@@ -131,9 +131,14 @@ def parse_args():
 
 
 def main():
+    import time
+
     args = parse_args()
     cfg = Config
+    times = {}
+
     # 1. Сбор product_links.csv (если нет)
+    t0 = time.time()
     if not os.path.exists("product_links.csv"):
         processor = Processor(image_size=(512, 512), batch_size=32)
         driver = processor.create_persistent_driver()
@@ -151,8 +156,11 @@ def main():
         logging.info("product_links.csv сформирован")
     else:
         logging.info("product_links.csv найден, пропускаем сбор ссылок")
+    times["collect_links"] = time.time() - t0
+    logging.info(f"Время сбора ссылок: {times['collect_links']:.2f} сек")
 
     # 2. Сбор parsed_products.csv (если нет или не все ссылки обработаны)
+    t1 = time.time()
     df_links = pd.read_csv("product_links.csv")
     n_links = len(df_links)
     need_parse = True
@@ -204,12 +212,18 @@ def main():
             )
         )
         logging.info("parsed_products.csv сформирован")
+    times["parsing"] = time.time() - t1
+    logging.info(f"Время парсинга товаров: {times['parsing']:.2f} сек")
 
 
 if __name__ == "__main__":
+    import time
+
+    main_start = time.time()
     main()
     parsed_csv = "parsed_products.csv"
     output_csv = "final_products.csv"
+    t2 = time.time()
     if os.path.exists(parsed_csv):
         df_parsed = pd.read_csv(parsed_csv)
         n_parsed = len(df_parsed)
@@ -220,13 +234,37 @@ if __name__ == "__main__":
                 logging.info(
                     "final_products.csv найден и все строки обработаны, пропускаем инференс"
                 )
+                inference_time = 0.0
             else:
                 logging.info(
                     f"final_products.csv найден, обработано {n_final} из {n_parsed} — доинференсим оставшиеся"
                 )
-                # Запуск инференса только для недостающих строк
+                t_inf = time.time()
                 run_inference(parsed_csv=parsed_csv, output_csv=output_csv)
+                inference_time = time.time() - t_inf
         else:
+            t_inf = time.time()
             run_inference(parsed_csv=parsed_csv, output_csv=output_csv)
+            inference_time = time.time() - t_inf
     else:
         logging.warning("parsed_products.csv не найден, инференс невозможен")
+        inference_time = 0.0
+
+    # Финальная сводка по времени
+    total_time = time.time() - main_start
+    try:
+        from collections import defaultdict
+
+        times = defaultdict(float, locals().get("times", {}))
+        times["inference"] = inference_time
+        logging.info(
+            f"\n==== ВРЕМЯ ЭТАПОВ ===="
+            f"\nСбор ссылок: {times['collect_links']:.2f} сек"
+            f"\nПарсинг: {times['parsing']:.2f} сек"
+            f"\nИнференс: {times['inference']:.2f} сек"
+            f"\n----------------------"
+            f"\nВсего: {total_time:.2f} сек"
+            f"\n====================="
+        )
+    except Exception as e:
+        logging.warning(f"Не удалось вывести финальную статистику по времени: {e}")
