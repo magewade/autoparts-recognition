@@ -132,10 +132,21 @@ def parse_args():
 
 def main():
     import time
+    import re
 
     args = parse_args()
     cfg = Config
     times = {}
+    runtime_logs = []
+
+    orig_logging_info = logging.info
+
+    def custom_logging_info(msg, *a, **kw):
+        orig_logging_info(msg, *a, **kw)
+        if isinstance(msg, str) and msg.startswith("Runtime of "):
+            runtime_logs.append(msg)
+
+    logging.info = custom_logging_info
 
     # 1. Сбор product_links.csv (если нет)
     if not os.path.exists("product_links.csv"):
@@ -218,13 +229,16 @@ def main():
         )
         times["parsing"] = time.time() - t1
         logging.info("parsed_products.csv сформирован")
+    # Восстанавливаем logging.info
+    logging.info = orig_logging_info
+    return runtime_logs
 
 
 if __name__ == "__main__":
     import time
 
     main_start = time.time()
-    main()
+    runtime_logs = main()
     parsed_csv = "parsed_products.csv"
     output_csv = "final_products.csv"
     if os.path.exists(parsed_csv):
@@ -270,8 +284,11 @@ if __name__ == "__main__":
 
         times = defaultdict(float, locals().get("times", {}))
         times["inference"] = inference_time
+        logging.info("\n==== RUNTIME LOGS ====")
+        for log in runtime_logs:
+            logging.info(log)
         logging.info(
-            f"\n==== ВРЕМЯ ЭТАПОВ ===="
+            "\n==== ВРЕМЯ ЭТАПОВ ===="
             f"\nСбор ссылок: {fmt_time(times['collect_links'])}"
             f"\nПарсинг: {fmt_time(times['parsing'])}"
             f"\nИнференс: {fmt_time(times['inference'])}"
