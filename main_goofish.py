@@ -301,14 +301,58 @@ if __name__ == "__main__":
     parsed_csv = "parsed_products.csv"
     parsed_with_model_csv = "parsed_products_with_model.csv"
     output_csv = "final_products.csv"
-    # Получаем API ключи из env или args (пример)
-    api_keys = os.environ.get("GEMINI_API_KEYS")
-    api_keys = [k.strip() for k in api_keys.split(",") if k.strip()]
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--api-keys", nargs="+", required=True, help="List of API keys to use"
+    )
+    parser.add_argument(
+        "--gemini-api-model",
+        type=str,
+        default="gemini-2.5-flash",
+        help="Gemini model name",
+    )
+    parser.add_argument("--car-brand", type=str, default=None, help="Car brand")
+    parser.add_argument(
+        "--prompt_override", type=str, default=None, help="Prompt override"
+    )
+    parser.add_argument(
+        "--save-file-name",
+        type=str,
+        default="final_products",
+        help="Output CSV base name",
+    )
+    parser.add_argument("--max-steps", type=int, default=3, help="Max pages to parse")
+    parser.add_argument(
+        "--max-links", type=int, default=90, help="Max product links to collect"
+    )
+    parser.add_argument(
+        "--desc-api-keys",
+        nargs="+",
+        default=None,
+        help="API keys for description LLM (optional)",
+    )
+    parser.add_argument(
+        "--desc-model",
+        type=str,
+        default="gemini-2.5-flash-lite",
+        help="Gemini model for description LLM",
+    )
+    cli_args, _ = parser.parse_known_args()
+
+    api_keys = cli_args.api_keys
+    desc_model = cli_args.desc_model
+    if cli_args.desc_api_keys is not None:
+        api_keys_desc = cli_args.desc_api_keys
+    else:
+        api_keys_desc = api_keys
 
     if os.path.exists(parsed_csv):
         # 1. LLM по описанию
         parsed_with_model_csv = extract_model_from_description(
-            parsed_csv, parsed_with_model_csv, api_keys=api_keys
+            parsed_csv,
+            parsed_with_model_csv,
+            api_keys=api_keys_desc,
+            model_name=desc_model,
         )
         df_parsed = pd.read_csv(parsed_with_model_csv)
         n_parsed = len(df_parsed)
