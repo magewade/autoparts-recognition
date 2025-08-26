@@ -33,12 +33,12 @@ Instructions:
 6. Ignore numbers that are clearly dates, serials, or batch codes unless no other candidates exist.
 
 Always answer strictly in this format (always in English, always 4 fields, always separated by |):
-<START> [Model/Part Number] | [Brand/Model Guess] | [Presumptive Model Number] | [Multiple? True/False] <END>
+<START> [Brand/Model Guess] | [Model/Part Number]| [Presumptive Model Number] | [Multiple? True/False] <END>
 
-- [Model/Part Number]: The most likely part/model number found, or nan.
 - [Brand/Model Guess]: The car brand/model you used (either provided or inferred), or nan.
+- [Model/Part Number]: The most likely part/model number found, or nan.
 - [Presumptive Model Number]: The most likely model number for the car, if available, or nan.
-- [Multiple? True/False]: True if multiple plausible numbers were found, otherwise False.
+- [Multiple? True/False]: True if you see not one physical detail on photo, imediately return True.
 
 If you don't know a value, write nan. Do not output anything else except the required 4 fields in the specified format. Always answer in English.
 """
@@ -67,6 +67,10 @@ class GeminiInference:
             self.system_prompt = prompt_override.strip() + "\n\n" + base_prompt
         else:
             self.system_prompt = base_prompt
+
+        # Log the final prompt used for LLM inference
+        import logging
+        logging.info(f"[LLM PROMPT] car_brand: {self.car_brand} | Final system prompt:\n{self.system_prompt}")
 
         self.configure_api()
         generation_config = {
