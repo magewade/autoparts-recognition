@@ -59,9 +59,8 @@ class GeminiInference:
 
         # Используем override, если он задан, иначе берем из prompts.json или дефолт
         base_prompt = self.prompts.get(self.car_brand, {}).get(
-            "main_prompt", DEFAULT_PROMPT
-        )
-        # Always substitute {car_brand} in the prompt, even if it's 'nan'
+            "main_prompt"
+        ) or self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
         base_prompt = base_prompt.replace("{car_brand}", self.car_brand)
         if prompt_override:
             self.system_prompt = prompt_override.strip() + "\n\n" + base_prompt
@@ -70,7 +69,10 @@ class GeminiInference:
 
         # Log the final prompt used for LLM inference
         import logging
-        logging.info(f"[LLM PROMPT] car_brand: {self.car_brand} | Final system prompt:\n{self.system_prompt}")
+
+        logging.info(
+            f"[LLM PROMPT] car_brand: {self.car_brand} | Final system prompt:\n{self.system_prompt}"
+        )
 
         self.configure_api()
         generation_config = {
