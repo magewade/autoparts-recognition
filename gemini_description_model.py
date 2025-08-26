@@ -4,7 +4,7 @@ import time
 
 
 class GeminiDescriptionInference:
-    def __init__(self, api_keys, model_name="gemini-2.5-flash-lite"):
+    def __init__(self, api_keys, model_name="gemini-2.0-flash-lite"):
         self.api_keys = api_keys
         self.current_key_index = 0
         self.model_name = model_name
@@ -60,12 +60,13 @@ class GeminiDescriptionInference:
                 response = self.model.generate_content(prompt)
                 guess = response.text.strip()
                 logging.info(f"[LLM desc] Ответ: {guess}")
+                time.sleep(2.1)  # <= 30 запросов в минуту
                 return guess
             except Exception as e:
                 if "quota" in str(e).lower():
                     self.switch_api_key()
-                    time.sleep(2)
+                    time.sleep(2.1)
                 else:
                     logging.warning(f"[Desc LLM] Error: {e}")
-                    time.sleep(2)
+                    time.sleep(2.1)
         return "ERROR"

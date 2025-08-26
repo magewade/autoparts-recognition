@@ -290,6 +290,38 @@ class GeminiInference:
 
         self.message_history = []
 
+        allowed_brands = [
+            "audi",
+            "toyota",
+            "nissan",
+            "suzuki",
+            "honda",
+            "daihatsu",
+            "subaru",
+            "mazda",
+            "bmw",
+            "lexus",
+            "volkswagen",
+            "vw",
+            "volvo",
+            "mini",
+            "fiat",
+            "citroen",
+            "renault",
+            "ford",
+            "isuzu",
+            "opel",
+            "mitsubishi",
+            "mercedes",
+            "jaguar",
+            "peugeot",
+            "porsche",
+            "alfa_romeo",
+            "chevrolet",
+            "denso",
+            "hitachi",
+        ]
+
         max_attempts = 2
         for attempt in range(max_attempts):
             # Для retry добавляем жёсткое сообщение к system_prompt
@@ -313,6 +345,22 @@ class GeminiInference:
             extracted_number = self.extract_number(answer)
 
             logging.info(f"Attempt {attempt + 1}: Extracted number: {extracted_number}")
+
+            # --- BRAND CHECK ---
+            # Оставляем только разрешённые бренды, иначе unknown
+            try:
+                # Извлекаем бренд (первое поле до первого |)
+                brand_guess = extracted_number.split("|")[0].strip().lower()
+                # Если не в списке, заменяем на 'unknown'
+                if brand_guess not in allowed_brands and brand_guess not in [
+                    "none",
+                    "",
+                ]:
+                    parts = extracted_number.split("|")
+                    parts[0] = "unknown"
+                    extracted_number = " | ".join([p.strip() for p in parts])
+            except Exception as e:
+                logging.warning(f"Brand post-check failed: {e}")
 
             # Если LLM вернул специальный маркер о множестве номеров
             if extracted_number.strip().endswith("| True"):
