@@ -19,42 +19,28 @@ logging.basicConfig(
 )
 
 DEFAULT_PROMPT = """
-Identify the most likely model or part number from the photo of any automotive part, using the following universal algorithm:
+You are an expert in extracting automotive part/model numbers from images. If the car model is provided (variable: {car_brand}), use it to help identify the most likely part/model number visible in the image. If the car model is not provided (None or empty), first try to infer the car model from the image, then extract the most likely part/model number.
 
-1. **Scan the Image Thoroughly:**
-    - Examine all visible text, numbers, barcodes, and labels in the image.
-    - Focus on stickers, embossed/engraved areas, and prominent alphanumeric sequences.
-    - Pay special attention to numbers near brand names, barcodes, or in bold/large font.
+Instructions:
+1. Carefully examine all visible text, numbers, barcodes, and labels in the image.
+2. If {car_brand} is given, use it to filter and validate possible part/model numbers. Prefer numbers that are known to be used for this model or that match typical formats for this brand/model.
+3. If {car_brand} is not given, try to infer the car model from any visible logos, text, or context, and use this guess in your answer.
+4. Select the most likely part/model number according to these rules:
+    - Prefer numbers close to the brand/model name, in bold or large font, or matching known patterns.
+    - If multiple candidates exist, choose the most prominent or structured one.
+    - If no plausible number is found, use nan.
+5. Be careful with character confusion: '1' vs 'I', '0' vs 'O', etc.
+6. Ignore numbers that are clearly dates, serials, or batch codes unless no other candidates exist.
 
-2. **Understand Brand and Format Diversity:**
-    - The part/model number may follow different formats depending on the brand (e.g., Toyota, Audi, Bosch, Denso, etc.).
-    - Typical identifiers are 8–15 characters, often a mix of letters and digits, sometimes with hyphens or spaces.
-    - If the brand is visible, prefer numbers that match known formats for that brand (if you know them).
-    - If no brand is visible, select the most prominent, structured number.
+Always answer strictly in this format (always in English, always 4 fields, always separated by |):
+<START> [Model/Part Number] | [Brand/Model Guess] | [Presumptive Model Number] | [Multiple? True/False] <END>
 
-3. **Selection Rules:**
-    - If multiple candidates exist, choose the one that is:
-      - Closest to the brand name or logo (if present)
-      - In bold or larger font
-      - Most structured (e.g., contains both letters and digits, or matches a known pattern)
-    - If all candidates are equally likely, pick the first one (top-to-bottom, left-to-right).
-    - If no plausible number is found, return NONE.
+- [Model/Part Number]: The most likely part/model number found, or nan.
+- [Brand/Model Guess]: The car brand/model you used (either provided or inferred), or nan.
+- [Presumptive Model Number]: The most likely model number for the car, if available, or nan.
+- [Multiple? True/False]: True if multiple plausible numbers were found, otherwise False.
 
-4. **Common Pitfalls:**
-    - Be careful with character confusion: '1' vs 'I', '0' vs 'O', '8' vs 'B', '5' vs 'S', '2' vs 'Z'.
-    - Ignore numbers that are clearly dates, serials, or batch codes unless no other candidates exist.
-    - If the only visible identifier is a long string (e.g., 16+ characters) or a barcode, extract the most plausible substring.
-
-5. **Contextual Verification:**
-    - Consider the part's function and any visible brand/model context.
-    - If the part is from a well-known brand, try to match the number to typical formats for that brand.
-    - If the part is generic or the brand is unknown, select the most prominent number.
-
-**Response Format:**
-- If a model/part number is identified: `<START> [Model/Part Number] <END>`
-- If no valid number is identified: `<START> NONE <END>`
-
-If there are multiple numbers, return only the one that is most likely to be the main identifier for this part.
+If you don't know a value, write nan. Do not output anything else except the required 4 fields in the specified format. Always answer in English.
 """
 
 
@@ -68,13 +54,15 @@ class GeminiInference:
     ):
         self.api_keys = api_keys
         self.current_key_index = 0
-        self.car_brand = car_brand.lower() if car_brand else None
+        self.car_brand = car_brand.lower() if car_brand else "nan"
         self.prompts = self.load_prompts()
 
         # Используем override, если он задан, иначе берем из prompts.json или дефолт
         base_prompt = self.prompts.get(self.car_brand, {}).get(
             "main_prompt", DEFAULT_PROMPT
         )
+        # Always substitute {car_brand} in the prompt, even if it's 'nan'
+        base_prompt = base_prompt.replace("{car_brand}", self.car_brand)
         if prompt_override:
             self.system_prompt = prompt_override.strip() + "\n\n" + base_prompt
         else:
