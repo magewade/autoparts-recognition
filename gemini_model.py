@@ -58,9 +58,15 @@ class GeminiInference:
         self.prompts = self.load_prompts()
 
         # Используем override, если он задан, иначе берем из prompts.json или дефолт
-        base_prompt = self.prompts.get(self.car_brand, {}).get(
-            "main_prompt"
-        ) or self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
+        # base_prompt = self.prompts.get(self.car_brand, {}).get(
+        #     "main_prompt"
+        # ) or self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
+        # base_prompt = base_prompt.replace("{car_brand}", self.car_brand)
+        # if prompt_override:
+        #     self.system_prompt = prompt_override.strip() + "\n\n" + base_prompt
+        # else:
+        #     self.system_prompt = base_prompt
+        base_prompt = self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
         base_prompt = base_prompt.replace("{car_brand}", self.car_brand)
         if prompt_override:
             self.system_prompt = prompt_override.strip() + "\n\n" + base_prompt
@@ -87,9 +93,10 @@ class GeminiInference:
             },
         ]
 
-        self.system_prompt = self.prompts.get(self.car_brand, {}).get(
-            "main_prompt"
-        ) or self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
+        # self.system_prompt = self.prompts.get(self.car_brand, {}).get(
+        #     "main_prompt"
+        # ) or self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
+        self.system_prompt = self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
 
         self.model = genai.GenerativeModel(
             model_name=model_name,
