@@ -282,7 +282,28 @@ class GeminiInference:
 
         max_attempts = 2
         for attempt in range(max_attempts):
+            # Для retry добавляем жёсткое сообщение к system_prompt
+            if attempt == 1:
+                orig_prompt = self.system_prompt
+                self.system_prompt = (
+                    "Previous answer did not match required format (must contain exactly 3 pipe | characters and 4 fields). STRICTLY follow the output format!\n\n"
+                    + orig_prompt
+                )
             answer = self.get_response(img_data, retry=(attempt > 0))
+            # Проверка формата: должно быть ровно 3 pipe (|) и <START>/<END>
+            if (
+                answer.count("|") != 3
+                or "<START>" not in answer
+                or "<END>" not in answer
+            ):
+                logging.info(
+                    f"LLM output format invalid (pipes: {answer.count('|')}), retrying..."
+                    if attempt == 0
+                    else "All attempts failed or only nan found."
+                )
+                if attempt == max_attempts - 1:
+                    break
+                continue
             extracted_number = self.extract_number(answer)
 
             logging.info(f"Attempt {attempt + 1}: Extracted number: {extracted_number}")
