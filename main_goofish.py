@@ -48,7 +48,9 @@ def extract_model_from_description(
         if "description_model_guess" in df_out.columns and len(df_out) == len(df):
             logging.info(f"{output_csv} найден, пропускаем LLM по описанию")
             return output_csv
-    llm = GeminiInference(api_keys=api_keys, model_name=model_name)
+    from gemini_description_model import GeminiDescriptionInference
+
+    llm = GeminiDescriptionInference(api_keys=api_keys, model_name=model_name)
     logging.info(f"[LLM desc] Используемая модель: {model_name}")
     guesses = []
     for i, row in df.iterrows():
@@ -56,16 +58,8 @@ def extract_model_from_description(
         if not desc.strip():
             guesses.append("")
             continue
-        prompt = (
-            "Extract only ONE car model name from the description, for which the part is intended. "
-            "Always answer in English. Output ONLY the single car model name, no tags, no extra text, no markup, no translation of brand/model names. "
-            "The model should be from this list: audi, toyota, nissan, suzuki, honda, daihatsu, subaru, mazda, bmw, lexus, volkswagen, volvo, mini, fiat, citroen, renault, ford, isuzu, opel, mitsubishi, mercedes, jaguar, peugeot, porsche, alfa_romeo, chevrolet, denso, hitachi"
-            "If no model is specified, output exactly: unknown. "
-            "Do not use any tags, brackets, or special formatting. Only output the model name or unknown. "
-            + desc
-        )
         try:
-            guess = llm.model.generate_content(prompt).text.strip()
+            guess = llm(desc)
             logging.info(f"[LLM desc] Строка {i}: результат Gemini: {guess}")
         except Exception as e:
             logging.warning(f"Gemini LLM error on row {i}: {e}")
