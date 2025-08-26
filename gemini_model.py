@@ -96,7 +96,9 @@ class GeminiInference:
         # self.system_prompt = self.prompts.get(self.car_brand, {}).get(
         #     "main_prompt"
         # ) or self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
-        self.system_prompt = self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
+        self.system_prompt = self.prompts.get("all", {}).get(
+            "main_prompt", DEFAULT_PROMPT
+        )
 
         self.model = genai.GenerativeModel(
             model_name=model_name,
@@ -298,9 +300,7 @@ class GeminiInference:
                 )
             answer = self.get_response(img_data, retry=(attempt > 0))
             # Проверка формата: должно быть ровно 3 pipe (|) и <START>/<END>
-            if (
-                answer.count("|") != 3
-            ):
+            if answer.count("|") != 3:
                 logging.info(
                     f"LLM output format invalid (pipes: {answer.count('|')}), retrying..."
                     if attempt == 0
@@ -315,9 +315,12 @@ class GeminiInference:
 
             # Если LLM вернул специальный маркер о множестве номеров
             if extracted_number.strip().endswith("| True"):
-                logging.warning("Multiple numbers detected, returning special marker.")
+                logging.warning(
+                    "Multiple numbers detected, returning special marker with model name."
+                )
+                model_guess = extracted_number.split("|")[0].strip()
                 self.reset_incorrect_predictions()
-                return "nan | nan | nan | True"
+                return f"{model_guess} | nan | nan | True"
 
             # Если хоть какой-то номер найден в presumptive_model_number
             try:
