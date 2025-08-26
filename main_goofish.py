@@ -138,8 +138,8 @@ def main():
     times = {}
 
     # 1. Сбор product_links.csv (если нет)
-    t0 = time.time()
     if not os.path.exists("product_links.csv"):
+        t0 = time.time()
         processor = Processor(image_size=(512, 512), batch_size=32)
         driver = processor.create_persistent_driver()
         try:
@@ -154,10 +154,11 @@ def main():
         finally:
             processor.close_persistent_driver(driver)
         logging.info("product_links.csv сформирован")
+        times["collect_links"] = time.time() - t0
+        logging.info(f"Время сбора ссылок: {times['collect_links']:.2f} сек")
     else:
         logging.info("product_links.csv найден, пропускаем сбор ссылок")
-    times["collect_links"] = time.time() - t0
-    logging.info(f"Время сбора ссылок: {times['collect_links']:.2f} сек")
+        times["collect_links"] = None
 
     # 2. Сбор parsed_products.csv (если нет или не все ссылки обработаны)
     t1 = time.time()
@@ -172,6 +173,7 @@ def main():
             logging.info(
                 "parsed_products.csv найден и все ссылки обработаны, пропускаем парсинг Playwright"
             )
+            times["parsing"] = None
         else:
             logging.info(
                 f"parsed_products.csv найден, обработано {n_parsed} из {n_links}"
@@ -186,6 +188,7 @@ def main():
             import asyncio
 
             # Парсим только недостающие строки
+            t1 = time.time()
             df_for_parse = df_for_parse.iloc[n_parsed:]
             df_result = asyncio.run(
                 enrich_dataframe_playwright_async(
@@ -195,6 +198,7 @@ def main():
                     chunk_size=10,
                 )
             )
+            times["parsing"] = time.time() - t1
             logging.info("parsed_products.csv дополнен оставшимися строками")
     if need_parse:
         if "href" in df_links.columns:
@@ -206,14 +210,14 @@ def main():
         parser = GoofishParserPlaywrightAsync()
         import asyncio
 
+        t1 = time.time()
         df_result = asyncio.run(
             enrich_dataframe_playwright_async(
                 df_for_parse, parser, output_path="parsed_products.csv", chunk_size=10
             )
         )
+        times["parsing"] = time.time() - t1
         logging.info("parsed_products.csv сформирован")
-    times["parsing"] = time.time() - t1
-    logging.info(f"Время парсинга товаров: {times['parsing']:.2f} сек")
 
 
 if __name__ == "__main__":
@@ -223,7 +227,6 @@ if __name__ == "__main__":
     main()
     parsed_csv = "parsed_products.csv"
     output_csv = "final_products.csv"
-    t2 = time.time()
     if os.path.exists(parsed_csv):
         df_parsed = pd.read_csv(parsed_csv)
         n_parsed = len(df_parsed)
@@ -234,7 +237,7 @@ if __name__ == "__main__":
                 logging.info(
                     "final_products.csv найден и все строки обработаны, пропускаем инференс"
                 )
-                inference_time = 0.0
+                inference_time = None
             else:
                 logging.info(
                     f"final_products.csv найден, обработано {n_final} из {n_parsed} — доинференсим оставшиеся"
@@ -248,10 +251,20 @@ if __name__ == "__main__":
             inference_time = time.time() - t_inf
     else:
         logging.warning("parsed_products.csv не найден, инференс невозможен")
-        inference_time = 0.0
+        inference_time = None
 
     # Финальная сводка по времени
-    total_time = time.time() - main_start
+    def fmt_time(val):
+        return f"{val:.2f} сек" if val is not None else "пропущен"
+
+    total_time = 0.0
+    for v in [
+        locals().get("times", {}).get("collect_links"),
+        locals().get("times", {}).get("parsing"),
+        inference_time,
+    ]:
+        if v is not None:
+            total_time += v
     try:
         from collections import defaultdict
 
@@ -259,9 +272,9 @@ if __name__ == "__main__":
         times["inference"] = inference_time
         logging.info(
             f"\n==== ВРЕМЯ ЭТАПОВ ===="
-            f"\nСбор ссылок: {times['collect_links']:.2f} сек"
-            f"\nПарсинг: {times['parsing']:.2f} сек"
-            f"\nИнференс: {times['inference']:.2f} сек"
+            f"\nСбор ссылок: {fmt_time(times['collect_links'])}"
+            f"\nПарсинг: {fmt_time(times['parsing'])}"
+            f"\nИнференс: {fmt_time(times['inference'])}"
             f"\n----------------------"
             f"\nВсего: {total_time:.2f} сек"
             f"\n====================="
