@@ -2,7 +2,6 @@
 
 import google.generativeai as genai
 from pathlib import Path
-from time import sleep
 import random
 import logging
 import time
@@ -183,7 +182,7 @@ class GeminiInference:
 
                 full_prompt = image_parts + prompt_parts
 
-                sleep(random.uniform(1, 3))
+                time.sleep(random.uniform(1, 3))
 
                 chat = self.model.start_chat(history=self.message_history)
                 response = chat.send_message(full_prompt)
