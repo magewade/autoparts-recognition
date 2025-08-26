@@ -27,19 +27,19 @@ Instructions:
 4. Select the most likely part/model number according to these rules:
     - Prefer numbers close to the brand/model name, in bold or large font, or matching known patterns.
     - If multiple candidates exist, choose the most prominent or structured one.
-    - If no plausible number is found, use nan.
+    - If no plausible number is found, use None.
 5. Be careful with character confusion: '1' vs 'I', '0' vs 'O', etc.
 6. Ignore numbers that are clearly dates, serials, or batch codes unless no other candidates exist.
 
 Always answer strictly in this format (always in English, always 4 fields, always separated by |):
 <START> [Brand/Model Guess] | [Model/Part Number]| [Presumptive Model Number] | [Multiple? True/False] <END>
 
-- [Brand/Model Guess]: The car brand/model you used (either provided or inferred), or nan.
-- [Model/Part Number]: The most likely part/model number found, or nan.
-- [Presumptive Model Number]: The most likely model number for the car, if available, or nan.
+- [Brand/Model Guess]: The car brand/model you used (either provided or inferred), or None.
+- [Model/Part Number]: The most likely part/model number found, or None.
+- [Presumptive Model Number]: The most likely model number for the car, if available, or None.
 - [Multiple? True/False]: True if you see not one physical detail on photo, imediately return True.
 
-If you don't know a value, write nan. Do not output anything else except the required 4 fields in the specified format. Always answer in English.
+If you don't know a value, write None. Do not output anything else except the required 4 fields in the specified format. Always answer in English.
 """
 
 
@@ -53,7 +53,7 @@ class GeminiInference:
     ):
         self.api_keys = api_keys
         self.current_key_index = 0
-        self.car_brand = car_brand.lower() if car_brand else "nan"
+        self.car_brand = car_brand.lower() if car_brand else "None"
         self.prompts = self.load_prompts()
 
         # Используем override, если он задан, иначе берем из prompts.json или дефолт
@@ -229,6 +229,8 @@ class GeminiInference:
 
     def extract_number(self, response):
         number = response.split("<START>")[-1].split("<END>")[0].strip()
+        # Replace all 'nan' with 'None' in the output for consistency
+        number = number.replace("nan", "None")
         if number.upper() != "NONE":
             return self.format_part_number(number)
         return number
@@ -319,14 +321,14 @@ class GeminiInference:
                 )
                 model_guess = extracted_number.split("|")[0].strip()
                 self.reset_incorrect_predictions()
-                return f"{model_guess} | nan | nan | True"
+                return f"{model_guess} | None | None | True"
 
             # Если хоть какой-то номер найден в presumptive_model_number
             try:
                 presumptive = extracted_number.split("|")[2].strip()
             except Exception:
                 presumptive = ""
-            if presumptive and presumptive.lower() != "nan":
+            if presumptive and presumptive.lower() != "none":
                 logging.info(
                     f"Presumptive model number found: {presumptive}, accepting as valid result."
                 )
@@ -339,7 +341,7 @@ class GeminiInference:
                     f"No valid number found in attempt {attempt + 1}, retrying..."
                 )
 
-        logging.warning("All attempts failed or only nan found.")
+        logging.warning("All attempts failed or only None found.")
         self.reset_incorrect_predictions()
         # Возвращаем всегда 4 поля, если ничего не найдено
-        return "nan | nan | nan | False"
+        return "None | None | None | False"
