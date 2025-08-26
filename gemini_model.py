@@ -48,7 +48,7 @@ class GeminiInference:
     def __init__(
         self,
         api_keys,
-        model_name="gemini-1.5-flash",
+        model_name="gemini-2.5-flash",
         car_brand=None,
         prompt_override=None,
     ):
@@ -88,8 +88,8 @@ class GeminiInference:
         ]
 
         self.system_prompt = self.prompts.get(self.car_brand, {}).get(
-            "main_prompt", DEFAULT_PROMPT
-        )
+            "main_prompt"
+        ) or self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
 
         self.model = genai.GenerativeModel(
             model_name=model_name,
