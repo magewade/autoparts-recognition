@@ -48,6 +48,7 @@ def extract_model_from_description(
             logging.info(f"{output_csv} найден, пропускаем LLM по описанию")
             return output_csv
     llm = GeminiInference(api_keys=api_keys, model_name=model_name)
+    logging.info(f"[LLM desc] Используемая модель: {model_name}")
     guesses = []
     for i, row in df.iterrows():
         desc = str(row.get("description", ""))
@@ -55,11 +56,12 @@ def extract_model_from_description(
             guesses.append("")
             continue
         prompt = (
-            "Извлеки из текста описания только предполагаемую модель автомобиля (или список моделей через запятую), для которой предназначена деталь. Не пиши ничего кроме модели. Если моделей несколько — перечисли через запятую. Если не указано — верни NONE.\nОписание: "
+            "Extract only the car model name (or a list of models separated by commas) from the description, for which the part is intended. Do not write anything else except the model name(s). If multiple models are mentioned, list them separated by commas. If no model is specified, return NONE."
             + desc
         )
         try:
             guess = llm.model.generate_content(prompt).text.strip()
+            logging.info(f"[LLM desc] Строка {i}: результат Gemini: {guess}")
         except Exception as e:
             logging.warning(f"Gemini LLM error on row {i}: {e}")
             guess = "ERROR"
@@ -70,9 +72,7 @@ def extract_model_from_description(
                 len(df) - len(guesses)
             )
             df_temp.to_csv(output_csv, index=False)
-            logging.info(
-                f"[LLM desc] Промежуточные результаты сохранены в {output_csv}"
-            )
+            logging.info(f"[LLM desc] Промежуточные результаты записаны в {output_csv}")
         time.sleep(1.5)
     df["description_model_guess"] = guesses
     df.to_csv(output_csv, index=False)
