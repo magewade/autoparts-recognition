@@ -10,7 +10,8 @@ from gemini_model import GeminiInference
 import pandas as pd
 import logging
 import argparse
-
+import time
+import re
 
 import logging
 import pandas as pd
@@ -189,9 +190,6 @@ def parse_args():
 
 
 def main():
-    import time
-    import re
-
     args = parse_args()
     cfg = Config
     times = {}
@@ -289,14 +287,14 @@ def main():
         logging.info("parsed_products.csv сформирован")
     # Восстанавливаем logging.info
     logging.info = orig_logging_info
-    return runtime_logs
+    return runtime_logs, times
 
 
 if __name__ == "__main__":
     import time
 
     main_start = time.time()
-    runtime_logs = main()
+    runtime_logs, times = main()
 
     parsed_csv = "parsed_products.csv"
     parsed_with_model_csv = "parsed_products_with_model.csv"
@@ -391,22 +389,20 @@ if __name__ == "__main__":
     ]:
         if v is not None:
             total_time += v
-    try:
-        from collections import defaultdict
+            
+    from collections import defaultdict
 
-        times = defaultdict(float, locals().get("times", {}))
-        times["inference"] = inference_time
-        logging.info("\n==== RUNTIME LOGS ====")
-        for log in runtime_logs:
-            logging.info(log)
-        logging.info(
-            "\n==== ВРЕМЯ ЭТАПОВ ===="
-            f"\nСбор ссылок: {times['collect_links']}"
-            f"\nПарсинг: {fmt_time(times['parsing'])}"
-            f"\nИнференс: {fmt_time(times['inference'])}"
-            f"\n----------------------"
-            f"\nВсего: {total_time:.2f} сек"
-            f"\n====================="
-        )
-    except Exception as e:
-        logging.warning(f"Не удалось вывести финальную статистику по времени: {e}")
+    times = defaultdict(float, times)  # а не locals().get(...)
+    times["inference"] = inference_time
+    logging.info("\n==== RUNTIME LOGS ====")
+    for log in runtime_logs:
+        logging.info(log)
+    logging.info(
+        "\n==== ВРЕМЯ ЭТАПОВ ===="
+        f"\nСбор ссылок: {fmt_time(times['collect_links'])}"
+        f"\nПарсинг: {fmt_time(times['parsing'])}"
+        f"\nИнференс: {fmt_time(times['inference'])}"
+        f"\n----------------------"
+        f"\nВсего: {total_time:.2f} сек"
+        f"\n====================="
+    )
