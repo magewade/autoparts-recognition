@@ -1,5 +1,17 @@
 import ast
 
+from gemini_model import GeminiInference
+import pandas as pd
+import time
+import logging
+
+from picker_model import TargetModel
+from gemini_model import GeminiInference
+import pandas as pd
+import logging
+import argparse
+
+
 import logging
 import pandas as pd
 import os
@@ -11,18 +23,64 @@ from dataprocessor_goofish import (
     enrich_dataframe_playwright_async,
 )
 
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 
-def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.csv"):
-    from picker_model import TargetModel
-    from gemini_model import GeminiInference
-    import pandas as pd
-    import logging
-    import argparse
+def extract_model_from_description(
+    input_csv="parsed_products.csv",
+    output_csv="parsed_products_with_model.csv",
+    api_keys=None,
+    model_name="gemini-2.5-flash-lite",
+):
+    """
+    Для каждой строки вызывает GeminiInference по description, сохраняет результат в description_model_guess.
+    """
 
+    if api_keys is None:
+        raise ValueError("api_keys must be provided for GeminiInference")
+    df = pd.read_csv(input_csv)
+    if os.path.exists(output_csv):
+        df_out = pd.read_csv(output_csv)
+        if "description_model_guess" in df_out.columns and len(df_out) == len(df):
+            logging.info(f"{output_csv} найден, пропускаем LLM по описанию")
+            return output_csv
+    llm = GeminiInference(api_keys=api_keys, model_name=model_name)
+    guesses = []
+    for i, row in df.iterrows():
+        desc = str(row.get("description", ""))
+        if not desc.strip():
+            guesses.append("")
+            continue
+        prompt = (
+            "Извлеки из текста описания только предполагаемую модель автомобиля (или список моделей через запятую), для которой предназначена деталь. Не пиши ничего кроме модели. Если моделей несколько — перечисли через запятую. Если не указано — верни NONE.\nОписание: "
+            + desc
+        )
+        try:
+            guess = llm.model.generate_content(prompt).text.strip()
+        except Exception as e:
+            logging.warning(f"Gemini LLM error on row {i}: {e}")
+            guess = "ERROR"
+        guesses.append(guess)
+        if (i + 1) % 10 == 0:
+            df_temp = df.copy()
+            df_temp["description_model_guess"] = guesses + [""] * (
+                len(df) - len(guesses)
+            )
+            df_temp.to_csv(output_csv, index=False)
+            logging.info(
+                f"[LLM desc] Промежуточные результаты сохранены в {output_csv}"
+            )
+        time.sleep(1.5)
+    df["description_model_guess"] = guesses
+    df.to_csv(output_csv, index=False)
+    logging.info(f"[LLM desc] Финальные результаты сохранены в {output_csv}")
+    return output_csv
+
+
+def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.csv"):
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--api-keys", nargs="+", required=True, help="List of API keys to use"
@@ -239,10 +297,20 @@ if __name__ == "__main__":
 
     main_start = time.time()
     runtime_logs = main()
+
     parsed_csv = "parsed_products.csv"
+    parsed_with_model_csv = "parsed_products_with_model.csv"
     output_csv = "final_products.csv"
+    # Получаем API ключи из env или args (пример)
+    api_keys = os.environ.get("GEMINI_API_KEYS")
+    api_keys = [k.strip() for k in api_keys.split(",") if k.strip()]
+
     if os.path.exists(parsed_csv):
-        df_parsed = pd.read_csv(parsed_csv)
+        # 1. LLM по описанию
+        parsed_with_model_csv = extract_model_from_description(
+            parsed_csv, parsed_with_model_csv, api_keys=api_keys
+        )
+        df_parsed = pd.read_csv(parsed_with_model_csv)
         n_parsed = len(df_parsed)
         if os.path.exists(output_csv):
             df_final = pd.read_csv(output_csv)
@@ -257,11 +325,11 @@ if __name__ == "__main__":
                     f"final_products.csv найден, обработано {n_final} из {n_parsed} — доинференсим оставшиеся"
                 )
                 t_inf = time.time()
-                run_inference(parsed_csv=parsed_csv, output_csv=output_csv)
+                run_inference(parsed_csv=parsed_with_model_csv, output_csv=output_csv)
                 inference_time = time.time() - t_inf
         else:
             t_inf = time.time()
-            run_inference(parsed_csv=parsed_csv, output_csv=output_csv)
+            run_inference(parsed_csv=parsed_with_model_csv, output_csv=output_csv)
             inference_time = time.time() - t_inf
     else:
         logging.warning("parsed_products.csv не найден, инференс невозможен")
@@ -289,7 +357,7 @@ if __name__ == "__main__":
             logging.info(log)
         logging.info(
             "\n==== ВРЕМЯ ЭТАПОВ ===="
-            f"\nСбор ссылок: {fmt_time(times['collect_links'])}"
+            f"\nСбор ссылок: {times['collect_links']}"
             f"\nПарсинг: {fmt_time(times['parsing'])}"
             f"\nИнференс: {fmt_time(times['inference'])}"
             f"\n----------------------"
