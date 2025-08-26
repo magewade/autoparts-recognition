@@ -105,14 +105,10 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
     args, _ = parser.parse_known_args()
 
     picker = TargetModel()
-    llm = GeminiInference(
-        api_keys=args.api_keys,
-        model_name=args.gemini_api_model,
-        car_brand=args.car_brand,
-        prompt_override=args.prompt_override,
-    )
     df = pd.read_csv(parsed_csv)
     result_path = args.save_file_name + ".csv"
+    # Если есть столбец description_model_guess, будем использовать его для car_brand
+    has_model_guess = "description_model_guess" in df.columns
     if os.path.exists(result_path):
         df_result = pd.read_csv(result_path)
         processed_mask = df_result.get("predicted_image", "").astype(str).str.len() > 0
@@ -151,9 +147,21 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
                 predicted_images[i] = images_list[0]
                 confidences[i] = ""
             llm_pred = ""
+            # --- Передаем модель авто из description_model_guess, если есть ---
+            car_brand = args.car_brand
+            if has_model_guess:
+                guess = str(row.get("description_model_guess", "")).strip()
+                if guess and guess.upper() != "NONE":
+                    car_brand = guess
+            llm_row = GeminiInference(
+                api_keys=args.api_keys,
+                model_name=args.gemini_api_model,
+                car_brand=car_brand,
+                prompt_override=args.prompt_override,
+            )
             for attempt in range(2):
                 try:
-                    llm_pred = llm(predicted_images[i])
+                    llm_pred = llm_row(predicted_images[i])
                     if not llm_pred:
                         raise ValueError(f"Empty LLM response: {llm_pred}")
                     break  # успех
@@ -389,7 +397,7 @@ if __name__ == "__main__":
     ]:
         if v is not None:
             total_time += v
-            
+
     from collections import defaultdict
 
     times = defaultdict(float, times)  # а не locals().get(...)
