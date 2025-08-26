@@ -156,9 +156,6 @@ class GeminiInference:
         max_retries = 10
         base_delay = 5
 
-        # Логируем первые 50 символов system_prompt
-        logging.info(f"[LLM prompt head]: {self.system_prompt[:50].replace('\n',' ')} ...")
-
         for attempt in range(max_retries):
             try:
                 image_parts = [
@@ -303,8 +300,6 @@ class GeminiInference:
             # Проверка формата: должно быть ровно 3 pipe (|) и <START>/<END>
             if (
                 answer.count("|") != 3
-                or "<START>" not in answer
-                or "<END>" not in answer
             ):
                 logging.info(
                     f"LLM output format invalid (pipes: {answer.count('|')}), retrying..."
