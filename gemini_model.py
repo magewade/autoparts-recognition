@@ -149,6 +149,9 @@ class GeminiInference:
         max_retries = 10
         base_delay = 5
 
+        # Логируем первые 50 символов system_prompt
+        logging.info(f"[LLM prompt head]: {self.system_prompt[:50].replace('\n',' ')} ...")
+
         for attempt in range(max_retries):
             try:
                 image_parts = [
