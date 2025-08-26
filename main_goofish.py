@@ -57,7 +57,7 @@ def extract_model_from_description(
             guesses.append("")
             continue
         prompt = (
-            "Extract only the car model name (or a list of models separated by commas) from the description, for which the part is intended. Do not write anything else except the model name(s). If multiple models are mentioned, list them separated by commas. If no model is specified, return NONE."
+            "Extract only the car model name (or a list of models separated by commas) from the description, for which the part is intended. Always answer in English. Do not write anything else except the model name(s). If multiple models are mentioned, list them separated by commas. If no model is specified, return NONE."
             + desc
         )
         try:
