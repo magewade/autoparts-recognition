@@ -90,7 +90,26 @@ class GoofishParserPlaywrightAsync:
             and any("price--" in c for c in tag["class"])
         )
         price = price_tag.text.strip() if price_tag else "N/A"
-        return {"price": price}
+        # --- Парсинг описания ---
+        desc_tag = soup.find("span", class_="desc--GaIUKUQY")
+        if desc_tag:
+            # Собрать весь текст, включая вложенные теги и переносы
+            description = desc_tag.get_text(separator="\n", strip=True)
+        else:
+            # Иногда описание может быть в других вложенных span внутри блока с этим классом
+            main_div = soup.find("div", class_="main--Nu33bWl6")
+            if main_div:
+                desc_spans = main_div.find_all("span", class_="desc--GaIUKUQY")
+                if desc_spans:
+                    description = "\n".join(
+                        [s.get_text(separator=" ", strip=True) for s in desc_spans]
+                    )
+                else:
+                    # fallback: собрать весь текст из main_div
+                    description = main_div.get_text(separator=" ", strip=True)
+            else:
+                description = ""
+        return {"price": price, "description": description}
 
 
 async def enrich_dataframe_playwright_async(
@@ -98,6 +117,7 @@ async def enrich_dataframe_playwright_async(
 ):
     prices = []
     images_all = []
+    descriptions = []
     output_path = Path(output_path)
     if output_path.exists():
         output_path.unlink()
@@ -122,16 +142,23 @@ async def enrich_dataframe_playwright_async(
             try:
                 product_info = await parser.load_product_info(url, page)
                 price = product_info.get("price", "N/A")
+                description = product_info.get("description", "")
                 print(f"[Main] Цена: {price}")
+                print(
+                    f"[Main] Описание: {description[:80]}{'...' if len(description)>80 else ''}"
+                )
             except Exception as e:
-                print(f"[Error] Не удалось загрузить цену: {e}")
+                print(f"[Error] Не удалось загрузить цену/описание: {e}")
                 price = "N/A"
+                description = ""
             prices.append(price)
+            descriptions.append(description)
             await asyncio.sleep(random.uniform(2, 5))
             if (i + 1) % chunk_size == 0:
                 temp_df = df.iloc[: i + 1].copy()
                 temp_df["price"] = prices
                 temp_df["images"] = images_all
+                temp_df["description"] = descriptions
                 temp_df.to_csv(output_path, index=False)
                 print(f"[Info] Промежуточные результаты записаны в {output_path}")
         # Сохраняем финальный результат, если не делится на chunk_size
@@ -139,6 +166,7 @@ async def enrich_dataframe_playwright_async(
             temp_df = df.iloc[: i + 1].copy()
             temp_df["price"] = prices
             temp_df["images"] = images_all
+            temp_df["description"] = descriptions
             temp_df.to_csv(output_path, index=False)
             print(f"[Info] Финальные результаты записаны в {output_path}")
         await browser.close()
@@ -334,29 +362,6 @@ class Processor(metaclass=RuntimeMeta):
 
         driver.get("https://www.goofish.com")
         human_sleep(3, 7)
-
-        # cookies = [
-        #     {
-        #         "name": "_m_h5_tk",
-        #         "value": "f7f7b405844996549b89e7d446ab17c7_1755010189196",
-        #     },
-        #     {"name": "_m_h5_tk_enc", "value": "48b7325338ec034774238119500289de"},
-        #     {"name": "atpsida", "value": "479518a88d5ec1c53e46658a_1755000829_1"},
-        #     {"name": "cna", "value": "B6kbIbUefW4CAZ611+tfYR/D"},
-        #     {"name": "cna", "value": "B6kbITpMRmkCAZ611+t7b+sL"},
-        #     {"name": "cookie2", "value": "1626f235bbcdd7170bef61fe4eb9101e"},
-        #     {"name": "mtop_partitioned_detect", "value": "1"},
-        #     {"name": "sca", "value": "a2d8698f"},
-        #     {"name": "t", "value": "40000c4303f6358b27bd11c644531188"},
-        #     {
-        #         "name": "tfstk",
-        #         "value": "gBJIaV02UUpackOAOToaho_OyXB5Fck4FusJm3eU29BLyzKA7e7FL0D5yebwLw-FpkAMuneeLXXzF9Xlequq3xoHxTX8Ukfatwx9jgnNvwnSGJBlequa_8CnhTYKCwENwhn14gy8wUCpXOIVWyUpywCTWisceaLJyNIOqgz8JJFpXAQG2TQJyTn6XNj5eaLRectO7TPO2b_eAmOw5Gurraxd58eJpX1ClFVze8p1A69JvNZUYdsCOZC-0PfkhnKpng9oD7_5Ag7L3ZOz37Z1i8s1uci_Z7XRFMDtoG_S86IGAmmsfyUh9Gj1Lci_ZrCdjGrifcaCw",
-        #     },
-        #     {"name": "xlly_s", "value": "1"},
-        # ]
-
-        # for cookie in cookies:
-        #     driver.add_cookie(cookie)
 
         collected = []
         driver.get(cfg.mainpage_url_goofish)
