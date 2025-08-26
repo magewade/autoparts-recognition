@@ -57,10 +57,11 @@ def extract_model_from_description(
             guesses.append("")
             continue
         prompt = (
-            "Extract only the car model name (or a list of models separated by commas) from the description, for which the part is intended. "
-            "Always answer in English. Output ONLY the car model name(s) in English, no tags, no extra text, no markup, no translation of brand/model names. "
-            "If multiple models are mentioned, list them separated by commas. If no model is specified, output exactly: NONE. "
-            "Do not use any tags, brackets, or special formatting. Only output the model name(s) separated by commas, or NONE. "
+            "Extract only ONE car model name from the description, for which the part is intended. "
+            "Always answer in English. Output ONLY the single car model name, no tags, no extra text, no markup, no translation of brand/model names. "
+            "The model should be from this list: audi, toyota, nissan, suzuki, honda, daihatsu, subaru, mazda, bmw, lexus, volkswagen, volvo, mini, fiat, citroen, renault, ford, isuzu, opel, mitsubishi, mercedes, jaguar, peugeot, porsche, alfa_romeo, chevrolet, denso, hitachi"
+            "If no model is specified, output exactly: unknown. "
+            "Do not use any tags, brackets, or special formatting. Only output the model name or unknown. "
             + desc
         )
         try:

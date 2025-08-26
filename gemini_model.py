@@ -67,13 +67,6 @@ class GeminiInference:
         else:
             self.system_prompt = base_prompt
 
-        # Log the final prompt used for LLM inference
-        import logging
-
-        logging.info(
-            f"[LLM PROMPT] car_brand: {self.car_brand} | Final system prompt:\n{self.system_prompt}"
-        )
-
         self.configure_api()
         generation_config = {
             "temperature": 1,
