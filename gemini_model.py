@@ -361,6 +361,11 @@ class GeminiInference:
             except Exception as e:
                 logging.warning(f"Brand post-check failed: {e}")
 
+            # Если результат не "None | None | False", считаем его валидным и возвращаем сразу
+            if extracted_number.strip().lower() != "none | none | false":
+                self.reset_incorrect_predictions()
+                return extracted_number
+
             # Если ничего не найдено, пробуем дальше
             if attempt < max_attempts - 1:
                 logging.info(
