@@ -384,8 +384,9 @@ if __name__ == "__main__":
         inference_time = None
 
     # Финальная сводка по времени
+
     def fmt_time(val):
-        return f"{val:.2f} сек" if val is not None else "пропущен"
+        return f"{val/60:.2f} мин" if val is not None else "пропущен"
 
     total_time = 0.0
     for v in [
@@ -409,6 +410,6 @@ if __name__ == "__main__":
         f"\nПарсинг: {fmt_time(times['parsing'])}"
         f"\nИнференс: {fmt_time(times['inference'])}"
         f"\n----------------------"
-        f"\nВсего: {total_time:.2f} сек"
+        f"\nВсего: {total_time/60:.2f} мин"
         f"\n====================="
     )

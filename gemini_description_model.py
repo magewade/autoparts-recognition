@@ -4,7 +4,7 @@ import time
 
 
 class GeminiDescriptionInference:
-    def __init__(self, api_keys, model_name="gemini-2.0-flash-lite"):
+    def __init__(self, api_keys, model_name="gemini-2.5-flash-lite"):
         self.api_keys = api_keys
         self.current_key_index = 0
         self.model_name = model_name
@@ -47,12 +47,13 @@ class GeminiDescriptionInference:
 
     def __call__(self, desc):
         prompt = (
-            "Extract only ONE car model name from the description, for which the part is intended. "
-            "Always answer in English. Output ONLY the single car model name, no tags, no extra text, no markup, no translation of brand/model names. "
+            "Extract the car model and part number(s) from the description. "
+            "Always answer in English. Output strictly in this format: [model] | [number] | [few_model], where [few_model] is True if it is clear from the description that several different parts or serial numbers are being sold (for example, if several part numbers or models are listed), otherwise False. "
             "The model should be from this list: audi, toyota, nissan, suzuki, honda, daihatsu, subaru, mazda, bmw, lexus, volkswagen, volvo, mini, fiat, citroen, renault, ford, isuzu, opel, mitsubishi, mercedes, jaguar, peugeot, porsche, alfa_romeo, chevrolet, denso, hitachi. "
-            "If no model is specified, output exactly: unknown. "
-            "Do not use any tags, brackets, or special formatting. Only output the model name or unknown. "
-            + desc
+            "If no model is specified, output exactly: unknown | None | False. "
+            "If several models or numbers are present, set [few_model] to True. "
+            "Do not use any tags, brackets, or special formatting. Only output the three fields separated by |. "
+            f" Description: {desc}"
         )
         max_retries = 5
         for attempt in range(max_retries):
@@ -61,7 +62,14 @@ class GeminiDescriptionInference:
                 guess = response.text.strip()
                 logging.info(f"[LLM desc] Ответ: {guess}")
                 time.sleep(2.1)  # <= 30 запросов в минуту
-                return guess
+                # Приводим к строгому формату: model | number | few_model
+                parts = [p.strip() for p in guess.split("|")]
+                # Если не три поля, fallback
+                if len(parts) != 3:
+                    return "unknown | None | False"
+                # few_model строго True/False
+                parts[2] = "True" if parts[2].lower() == "true" else "False"
+                return " | ".join(parts)
             except Exception as e:
                 if "quota" in str(e).lower():
                     self.switch_api_key()
