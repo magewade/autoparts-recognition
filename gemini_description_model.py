@@ -51,7 +51,7 @@ class GeminiDescriptionInference:
             "Always answer in English. Output strictly in this format: [model] | [number] | [few_model]"
             "The model should be from this list: audi, toyota, nissan, suzuki, honda, daihatsu, subaru, mazda, bmw, lexus, volkswagen, volvo, mini, fiat, citroen, renault, ford, isuzu, opel, mitsubishi, mercedes, jaguar, peugeot, porsche, alfa_romeo, chevrolet, denso, hitachi. "
             "If no model is specified, output exactly: unknown | None | False. "
-            "Where [few_model] is True if it is absolutely clear from the description that several different physical details are sold (if several part numbers are listed), otherwise False. "
+            "Where [few_model] is True is ONLY if several part numbers are listed (if it is absolutely clear from the description that several different physical details are sold), otherwise False. "
             "Do not use any tags, brackets, or special formatting. Only output the three fields separated by |. "
             f" Description: {desc}"
         )
