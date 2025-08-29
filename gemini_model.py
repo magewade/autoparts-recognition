@@ -31,15 +31,14 @@ Instructions:
 5. Be careful with character confusion: '1' vs 'I', '0' vs 'O', etc.
 6. Ignore numbers that are clearly dates, serials, or batch codes unless no other candidates exist.
 
-Always answer strictly in this format (always in English, always 4 fields, always separated by |):
-<START> [Brand/Model Guess] | [Model/Part Number]| [Presumptive Model Number] | [Multiple? True/False] <END>
+Always answer strictly in this format (always in English, always 3 fields, always separated by |):
+<START> [Brand/Model Guess] | [Model/Part Number] | [Multiple? True/False] <END>
 
 - [Brand/Model Guess]: The car brand/model you used (either provided or inferred), or None.
 - [Model/Part Number]: The most likely part/model number found, or None.
-- [Presumptive Model Number]: The most likely model number for the car, if available, or None.
-- [Multiple? True/False]: True if you see not one physical detail on photo, imediately return True.
+- [Multiple? True/False]: True if you see more than one plausible part/model number in the image, otherwise False.
 
-If you don't know a value, write None. Do not output anything else except the required 4 fields in the specified format. Always answer in English.
+If you don't know a value, write None. Do not output anything else except the required 3 fields in the specified format. Always answer in English.
 """
 
 
@@ -328,12 +327,12 @@ class GeminiInference:
             if attempt == 1:
                 orig_prompt = self.system_prompt
                 self.system_prompt = (
-                    "Previous answer did not match required format (must contain exactly 3 pipe | characters and 4 fields). STRICTLY follow the output format!\n\n"
+                    "Previous answer did not match required format (must contain exactly 2 pipe | characters and 3 fields). STRICTLY follow the output format!\n\n"
                     + orig_prompt
                 )
             answer = self.get_response(img_data, retry=(attempt > 0))
-            # Проверка формата: должно быть ровно 3 pipe (|) и <START>/<END>
-            if answer.count("|") != 3:
+            # Проверка формата: должно быть ровно 2 pipe (|) и <START>/<END>
+            if answer.count("|") != 2:
                 logging.info(
                     f"LLM output format invalid (pipes: {answer.count('|')}), retrying..."
                     if attempt == 0
@@ -362,27 +361,6 @@ class GeminiInference:
             except Exception as e:
                 logging.warning(f"Brand post-check failed: {e}")
 
-            # Если LLM вернул специальный маркер о множестве номеров
-            if extracted_number.strip().endswith("| True"):
-                logging.warning(
-                    "Multiple numbers detected, returning special marker with model name."
-                )
-                model_guess = extracted_number.split("|")[0].strip()
-                self.reset_incorrect_predictions()
-                return f"{model_guess} | None | None | True"
-
-            # Если хоть какой-то номер найден в presumptive_model_number
-            try:
-                presumptive = extracted_number.split("|")[2].strip()
-            except Exception:
-                presumptive = ""
-            if presumptive and presumptive.lower() != "none":
-                logging.info(
-                    f"Presumptive model number found: {presumptive}, accepting as valid result."
-                )
-                self.reset_incorrect_predictions()
-                return extracted_number
-
             # Если ничего не найдено, пробуем дальше
             if attempt < max_attempts - 1:
                 logging.info(
@@ -391,5 +369,5 @@ class GeminiInference:
 
         logging.warning("All attempts failed or only None found.")
         self.reset_incorrect_predictions()
-        # Возвращаем всегда 4 поля, если ничего не найдено
-        return "None | None | None | False"
+        # Возвращаем всегда 3 поля, если ничего не найдено
+        return "None | None | False"
