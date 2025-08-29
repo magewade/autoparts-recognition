@@ -48,10 +48,10 @@ class GeminiDescriptionInference:
     def __call__(self, desc):
         prompt = (
             "Extract the car model and part number(s) from the description. "
-            "Always answer in English. Output strictly in this format: [model] | [number] | [few_model], where [few_model] is True if it is clear from the description that several different parts or serial numbers are being sold (for example, if several part numbers or models are listed), otherwise False. "
+            "Always answer in English. Output strictly in this format: [model] | [number] | [few_model], where [few_model] is True if it is clear from the description that several different physical details or serial numbers are being sold (for example, if several part numbers or models are listed), otherwise False. "
             "The model should be from this list: audi, toyota, nissan, suzuki, honda, daihatsu, subaru, mazda, bmw, lexus, volkswagen, volvo, mini, fiat, citroen, renault, ford, isuzu, opel, mitsubishi, mercedes, jaguar, peugeot, porsche, alfa_romeo, chevrolet, denso, hitachi. "
             "If no model is specified, output exactly: unknown | None | False. "
-            "If several models or numbers are present, set [few_model] to True. "
+            "If several details or numbers are present, set [few_model] to True. "
             "Do not use any tags, brackets, or special formatting. Only output the three fields separated by |. "
             f" Description: {desc}"
         )
