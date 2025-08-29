@@ -127,9 +127,11 @@ async def enrich_dataframe_playwright_async(
             user_agent=random.choice(parser.headers_list)["User-Agent"]
         )
         page = await context.new_page()
+        last_i = -1
         for i, row in tqdm_asyncio(
             df.iterrows(), total=len(df), desc="Парсинг товаров"
         ):
+            last_i = i
             url = row["href"]
             print(f"[Main] Обрабатываем {url}")
             try:
@@ -162,8 +164,8 @@ async def enrich_dataframe_playwright_async(
                 temp_df.to_csv(output_path, index=False)
                 print(f"[Info] Промежуточные результаты записаны в {output_path}")
         # Сохраняем финальный результат, если не делится на chunk_size
-        if (i + 1) % chunk_size != 0:
-            temp_df = df.iloc[: i + 1].copy()
+        if last_i >= 0 and (last_i + 1) % chunk_size != 0:
+            temp_df = df.iloc[: last_i + 1].copy()
             temp_df["price"] = prices
             temp_df["images"] = images_all
             temp_df["description"] = descriptions

@@ -210,8 +210,13 @@ def main():
 
     logging.info = custom_logging_info
 
-    # 1. Сбор product_links.csv (если нет)
-    if not os.path.exists("product_links.csv"):
+    # 1. Сбор product_links.csv (если нет или не хватает ссылок)
+    need_collect_links = True
+    if os.path.exists("product_links.csv"):
+        df_links_check = pd.read_csv("product_links.csv")
+        if len(df_links_check) >= args.max_links:
+            need_collect_links = False
+    if need_collect_links:
         t0 = time.time()
         processor = Processor(image_size=(512, 512), batch_size=32)
         driver = processor.create_persistent_driver()
@@ -230,7 +235,9 @@ def main():
         times["collect_links"] = time.time() - t0
         logging.info(f"Время сбора ссылок: {times['collect_links']:.2f} сек")
     else:
-        logging.info("product_links.csv найден, пропускаем сбор ссылок")
+        logging.info(
+            "product_links.csv найден и содержит достаточно ссылок, пропускаем сбор ссылок"
+        )
         times["collect_links"] = None
 
     # 2. Сбор parsed_products.csv (если нет или не все ссылки обработаны)
