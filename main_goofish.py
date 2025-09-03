@@ -308,7 +308,8 @@ if __name__ == "__main__":
     import time
 
     main_start = time.time()
-    runtime_logs, times = main()
+    # runtime_logs, times = main()
+    main()
 
     parsed_csv = "parsed_products.csv"
     parsed_with_model_csv = "parsed_products_with_model.csv"

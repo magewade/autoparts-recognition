@@ -385,23 +385,31 @@ class Processor(metaclass=RuntimeMeta):
             print("Попап не найден или уже закрыт")
 
         # Кликаем по кнопке поиска
-        try:
-            wait = WebDriverWait(driver, 20)
-            search_btn = wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        '//button[contains(@class, "search-icon--") and @type="submit"]',
+        max_search_attempts = 3
+        for attempt in range(max_search_attempts):
+            try:
+                wait = WebDriverWait(driver, 20)
+                search_btn = wait.until(
+                    EC.element_to_be_clickable(
+                        (
+                            By.XPATH,
+                            '//button[contains(@class, "search-icon--") and @type="submit"]',
+                        )
                     )
                 )
-            )
-            ActionChains(driver).move_to_element(search_btn).pause(
-                random.uniform(0.3, 1.2)
-            ).click().perform()
-            human_sleep(2.5, 5.5)
-            print("Поиск выполнен")
-        except Exception as e:
-            print("Кнопка поиска не найдена или не нажата:", e)
+                ActionChains(driver).move_to_element(search_btn).pause(
+                    random.uniform(0.3, 1.2)
+                ).click().perform()
+                human_sleep(2.5, 5.5)
+                print("Поиск выполнен")
+                break  # если успешно, выходим из цикла
+            except Exception as e:
+                print(
+                    f"Кнопка поиска не найдена или не нажата (попытка {attempt+1}):", e
+                )
+                human_sleep(1, 2)
+        else:
+            print("Не удалось нажать на поиск после нескольких попыток.")
 
         for page in range(1, max_steps + 1):
             # Случайный скролл вверх/вниз
