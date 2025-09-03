@@ -47,13 +47,14 @@ class GeminiDescriptionInference:
 
     def __call__(self, desc):
         prompt = (
-            "Extract the car model and part number(s) from the description. "
-            "Always answer in English. Output strictly in this format: [model] | [number] | [one_or_many]. "
-            "The model should be from this list: audi, toyota, nissan, suzuki, honda, daihatsu, subaru, mazda, bmw, lexus, volkswagen, volvo, mini, fiat, citroen, renault, ford, isuzu, opel, mitsubishi, mercedes, jaguar, peugeot, porsche, alfa_romeo, chevrolet, denso, hitachi. "
-            "If no model is specified, output exactly: unknown | None | one. "
-            "[one_or_many] must be 'many' ONLY if several unique part numbers are listed (if it is absolutely clear from the description that several different physical parts are sold), otherwise 'one'. "
-            "Do not use any tags, brackets, or special formatting. Only output the three fields separated by |. "
-            f" Description: {desc}"
+            "Extract the car model (any, not just from a fixed list) and all part numbers from the following description. "
+            "If there are several part numbers in the format like 03C906057DK/BH/AR (with slashes, commas, spaces, etc.), extract all of them, separated by commas. "
+            "Carefully read the text and, if there are any indirect signs that the seller is offering more than one physical item (e.g. words like 'set', 'kit', 'several', '2 pcs', 'for different models', 'multiple', 'набор', 'комплект', 'несколько', '2 шт', etc.), set the last field to 'many'. "
+            "If you are not sure, set it to 'one'. "
+            "If you cannot find a model or number, write 'None'"
+            "Output strictly in this format: [model] | [numbers] | [one_or_many]. "
+            "Do not use any tags, brackets, or extra formatting. Only output the three fields separated by |. "
+            "Description: {desc}"
         )
         max_retries = 5
         for attempt in range(max_retries):
@@ -64,9 +65,6 @@ class GeminiDescriptionInference:
                 time.sleep(2.1)  # <= 30 запросов в минуту
                 # Приводим к строгому формату: model | number | one_or_many
                 parts = [p.strip() for p in guess.split("|")]
-                # Если не три поля, fallback
-                if len(parts) != 3:
-                    return "unknown | None | one"
                 # one_or_many строго one/many
                 parts[2] = "many" if parts[2].lower() == "many" else "one"
                 return " | ".join(parts)

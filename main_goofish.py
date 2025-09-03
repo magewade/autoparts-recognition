@@ -1,3 +1,19 @@
+import ast
+
+
+# --- Вспомогательная функция для извлечения первого URL из строки-списка images
+def get_first_image(images_str):
+    try:
+        images_list = (
+            ast.literal_eval(images_str) if isinstance(images_str, str) else images_str
+        )
+        if isinstance(images_list, list) and images_list:
+            return images_list[0]
+    except Exception:
+        pass
+    return None
+
+
 from gemini_description_model import GeminiDescriptionInference
 from gemini_one_many_on_photo import GeminiPhotoOneManyInference
 import os
@@ -345,11 +361,9 @@ def enrich_with_llm(
         images = row.get("images", "[]")
         photo_one_many = "one"
         try:
-            images_list = (
-                ast.literal_eval(images) if isinstance(images, str) else images
-            )
-            if images_list and isinstance(images_list, list) and images_list[0]:
-                photo_one_many = photo_llm(images_list[0])
+            first_image_url = get_first_image(images)
+            if first_image_url:
+                photo_one_many = photo_llm(first_image_url)
         except Exception as e:
             logging.warning(f"Photo LLM error on row {i}: {e}")
         photo_one_manys.append(photo_one_many)
