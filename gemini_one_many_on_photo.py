@@ -57,9 +57,14 @@ class GeminiPhotoOneManyInference:
         max_retries = 5
         for attempt in range(max_retries):
             try:
+                logging.info(f"[Photo LLM] Input image_url: {image_url}")
                 # Скачиваем картинку
                 response_img = requests.get(image_url, timeout=15)
+                logging.info(
+                    f"[Photo LLM] Downloaded image: {len(response_img.content)} bytes"
+                )
                 img = Image.open(BytesIO(response_img.content)).convert("RGB")
+                logging.info(f"[Photo LLM] Image size: {img.size}, mode: {img.mode}")
                 # Используем start_chat/send_message как во взрослой модели
                 image_parts = [img]
                 prompt_parts = [prompt]
@@ -79,10 +84,10 @@ class GeminiPhotoOneManyInference:
                     return answer
                 return "one"
             except Exception as e:
+                logging.warning(f"[Photo LLM] Error: {e} (image_url: {image_url})")
                 if "quota" in str(e).lower():
                     self.switch_api_key()
                     time.sleep(2.1)
                 else:
-                    logging.warning(f"[Photo LLM] Error: {e}")
                     time.sleep(2.1)
         return "ERROR"
