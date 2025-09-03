@@ -81,7 +81,7 @@ class GeminiDescriptionInference:
             "If the model name is written in a language other than English (for example, in Chinese), always translate or adapt it to the most common English name for that car brand. "
             "If the description mentions a specific model (like Rio, Golf, Camry, etc.), output only the general brand (like Kia, Volkswagen, Toyota, etc.) in the first field. "
             "Extract only numbers that look like real serial part numbers: they are usually 9 to 15 characters long, contain both letters and digits, and cannot be short (for example, three-digit numbers are not valid). Ignore numbers that are clearly too short or do not match this pattern."
-            "If there are several part numbers in the format like 03C906057DK/BH/AR (with slashes, commas, spaces, etc.), extract all of them, separated by commas. "
+            "If there are several part numbers in the format like 03C906057DK/BH/AR (with slashes, commas, spaces, etc.), extract the first 5 of them, separated by commas. "
             "If there are more than 5 part numbers, output only the first five, then write 'etc' after them. "
             "If you extract more than one unique part number, this is a clear sign that the last field should be 'many'. "
             "Carefully read the text and, if there are any indirect signs that the seller is offering more than one physical item (e.g. words like 'set', 'kit', 'several', '2 pcs', 'for different models', 'multiple', 'набор', 'комплект', 'несколько', '2 шт', etc.), set the last field to 'many'. "
