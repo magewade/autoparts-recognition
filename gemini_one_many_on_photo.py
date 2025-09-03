@@ -15,7 +15,7 @@ PHOTO_ONE_MANY_PROMPT = (
 
 
 class GeminiPhotoOneManyInference:
-    def __init__(self, api_keys, model_name="gemini-2.5-flash-light"):
+    def __init__(self, api_keys, model_name="gemini-2.5-flash-lite"):
         self.api_keys = api_keys
         self.current_key_index = 0
         self.model_name = model_name
@@ -23,10 +23,10 @@ class GeminiPhotoOneManyInference:
         self.model = genai.GenerativeModel(
             model_name=model_name,
             generation_config={
-                "temperature": 0,  # максимально детерминированно
+                "temperature": 0,
                 "top_p": 1,
                 "top_k": 1,
-                "max_output_tokens": 3,  # одно слово
+                "max_output_tokens": 8,
             },
             safety_settings=[
                 {
@@ -46,6 +46,7 @@ class GeminiPhotoOneManyInference:
                     "threshold": "BLOCK_ONLY_HIGH",
                 },
             ],
+            system_instruction=PHOTO_ONE_MANY_PROMPT,
         )
 
     def configure_api(self):
@@ -59,38 +60,21 @@ class GeminiPhotoOneManyInference:
     def get_response(self, img_data, retry=False):
         max_retries = 10
         base_delay = 5
-
         for attempt in range(max_retries):
             try:
-                # Получаем чистые байты
                 if isinstance(img_data, io.BytesIO):
                     image_bytes = img_data.getvalue()
-                else:  # Path
+                else:
                     image_bytes = img_data.read_bytes()
-
                 image_part = {
                     "inline_data": {
                         "mime_type": "image/jpeg",
                         "data": image_bytes,
                     }
                 }
-
-                # Формируем список parts
-                full_prompt = [
-                    image_part,
-                    {"text": PHOTO_ONE_MANY_PROMPT},
-                ]
-                if retry:
-                    full_prompt.append(
-                        {
-                            "text": "Previous answer was invalid. STRICTLY output only 'one' or 'many'."
-                        }
-                    )
-
+                full_prompt = [image_part]
                 time.sleep(random.uniform(1, 2))
                 response = self.model.generate_content(full_prompt)
-
-                # Логируем
                 try:
                     logging.info(f"[Photo LLM] Full response object: {response}")
                     if hasattr(response, "candidates"):
@@ -101,14 +85,11 @@ class GeminiPhotoOneManyInference:
                     logging.warning(
                         f"[Photo LLM] Could not log full response: {log_exc}"
                     )
-
                 answer_text = getattr(response, "text", None)
                 logging.info(f"[Photo LLM] Main model response: {answer_text}")
-
                 if not answer_text:
                     logging.warning("[Photo LLM] Empty answer from model")
                     return None
-
                 return answer_text.strip().lower()
             except Exception as e:
                 if "quota" in str(e).lower():
