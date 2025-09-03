@@ -61,7 +61,7 @@ class GeminiPhotoOneManyInference:
         base_delay = 5
         for attempt in range(max_retries):
             try:
-                image_parts = {
+                image_part = {
                     "inline_data": {
                         "mime_type": "image/jpeg",
                         "data": (
@@ -72,11 +72,16 @@ class GeminiPhotoOneManyInference:
                     }
                 }
 
-                # основной промпт
-                full_prompt = [image_parts, PHOTO_ONE_MANY_PROMPT]
+                # Формируем список parts
+                full_prompt = [
+                    image_part,
+                    {"text": PHOTO_ONE_MANY_PROMPT},
+                ]
                 if retry:
                     full_prompt.append(
-                        "Previous answer was invalid. STRICTLY output only 'one' or 'many'."
+                        {
+                            "text": "Previous answer was invalid. STRICTLY output only 'one' or 'many'."
+                        }
                     )
 
                 time.sleep(random.uniform(1, 2))
