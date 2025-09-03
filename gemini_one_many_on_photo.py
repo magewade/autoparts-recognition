@@ -83,6 +83,17 @@ class GeminiPhotoOneManyInference:
                 time.sleep(random.uniform(1, 2))
                 chat = self.model.start_chat(history=self.message_history)
                 response = chat.send_message(full_prompt)
+                # Логируем весь объект response для диагностики
+                try:
+                    logging.info(f"[Photo LLM] Full response object: {response}")
+                    if hasattr(response, "candidates"):
+                        logging.info(
+                            f"[Photo LLM] Response candidates: {response.candidates}"
+                        )
+                except Exception as log_exc:
+                    logging.warning(
+                        f"[Photo LLM] Could not log full response: {log_exc}"
+                    )
                 logging.info(
                     f"[Photo LLM] Main model response: {getattr(response, 'text', None)}"
                 )
