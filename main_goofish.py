@@ -246,67 +246,66 @@ def main():
         )
         times["collect_links"] = None
 
-    # ====== ЗАКОММЕНТИРОВАНО ======
-    # # 2. Сбор parsed_products.csv (если нет или не все ссылки обработаны)
-    # t1 = time.time()
-    # df_links = pd.read_csv("product_links.csv")
-    # n_links = len(df_links)
-    # need_parse = True
-    # if os.path.exists("parsed_products.csv"):
-    #     df_parsed = pd.read_csv("parsed_products.csv")
-    #     n_parsed = len(df_parsed)
-    #     if n_parsed >= n_links:
-    #         need_parse = False
-    #         logging.info(
-    #             "parsed_products.csv найден и все ссылки обработаны, пропускаем парсинг Playwright"
-    #         )
-    #         times["parsing"] = None
-    #     else:
-    #         logging.info(
-    #             f"parsed_products.csv найден, обработано {n_parsed} из {n_links}"
-    #         )
-    #         if "href" in df_links.columns:
-    #             df_for_parse = pd.DataFrame({"href": df_links["href"]})
-    #         elif "url" in df_links.columns:
-    #             df_for_parse = pd.DataFrame({"href": df_links["url"]})
-    #         else:
-    #             raise Exception("No href/url column in product_links.csv")
-    #         parser = GoofishParserPlaywrightAsync()
-    #         import asyncio
-    #
-    #         # Парсим только недостающие строки
-    #         t1 = time.time()
-    #         df_for_parse = df_for_parse.iloc[n_parsed:]
-    #         df_result = asyncio.run(
-    #             enrich_dataframe_playwright_async(
-    #                 df_for_parse,
-    #                 parser,
-    #                 output_path="parsed_products.csv",
-    #                 chunk_size=10,
-    #             )
-    #         )
-    #         times["parsing"] = time.time() - t1
-    #         logging.info("parsed_products.csv дополнен оставшимися строками")
-    # if need_parse:
-    #     if "href" in df_links.columns:
-    #         df_for_parse = pd.DataFrame({"href": df_links["href"]})
-    #     elif "url" in df_links.columns:
-    #         df_for_parse = pd.DataFrame({"href": df_links["url"]})
-    #     else:
-    #         raise Exception("No href/url column in product_links.csv")
-    #     parser = GoofishParserPlaywrightAsync()
-    #     import asyncio
-    #
-    #     t1 = time.time()
-    #     df_result = asyncio.run(
-    #         enrich_dataframe_playwright_async(
-    #             df_for_parse, parser, output_path="parsed_products.csv", chunk_size=10
-    #         )
-    #     )
-    #     times["parsing"] = time.time() - t1
-    #     logging.info("parsed_products.csv сформирован")
-    # # Восстанавливаем logging.info
-    # logging.info = orig_logging_info
+    # 2. Сбор parsed_products.csv (если нет или не все ссылки обработаны)
+    t1 = time.time()
+    df_links = pd.read_csv("product_links.csv")
+    n_links = len(df_links)
+    need_parse = True
+    if os.path.exists("parsed_products.csv"):
+        df_parsed = pd.read_csv("parsed_products.csv")
+        n_parsed = len(df_parsed)
+        if n_parsed >= n_links:
+            need_parse = False
+            logging.info(
+                "parsed_products.csv найден и все ссылки обработаны, пропускаем парсинг Playwright"
+            )
+            times["parsing"] = None
+        else:
+            logging.info(
+                f"parsed_products.csv найден, обработано {n_parsed} из {n_links}"
+            )
+            if "href" in df_links.columns:
+                df_for_parse = pd.DataFrame({"href": df_links["href"]})
+            elif "url" in df_links.columns:
+                df_for_parse = pd.DataFrame({"href": df_links["url"]})
+            else:
+                raise Exception("No href/url column in product_links.csv")
+            parser = GoofishParserPlaywrightAsync()
+            import asyncio
+    
+            # Парсим только недостающие строки
+            t1 = time.time()
+            df_for_parse = df_for_parse.iloc[n_parsed:]
+            df_result = asyncio.run(
+                enrich_dataframe_playwright_async(
+                    df_for_parse,
+                    parser,
+                    output_path="parsed_products.csv",
+                    chunk_size=10,
+                )
+            )
+            times["parsing"] = time.time() - t1
+            logging.info("parsed_products.csv дополнен оставшимися строками")
+    if need_parse:
+        if "href" in df_links.columns:
+            df_for_parse = pd.DataFrame({"href": df_links["href"]})
+        elif "url" in df_links.columns:
+            df_for_parse = pd.DataFrame({"href": df_links["url"]})
+        else:
+            raise Exception("No href/url column in product_links.csv")
+        parser = GoofishParserPlaywrightAsync()
+        import asyncio
+    
+        t1 = time.time()
+        df_result = asyncio.run(
+            enrich_dataframe_playwright_async(
+                df_for_parse, parser, output_path="parsed_products.csv", chunk_size=10
+            )
+        )
+        times["parsing"] = time.time() - t1
+        logging.info("parsed_products.csv сформирован")
+    # Восстанавливаем logging.info
+    logging.info = orig_logging_info
     return runtime_logs, times
 
 
@@ -364,38 +363,38 @@ if __name__ == "__main__":
     else:
         api_keys_desc = api_keys
 
-    if os.path.exists(parsed_csv):
-        # 1. LLM по описанию
-        parsed_with_model_csv = extract_model_from_description(
-            parsed_csv,
-            parsed_with_model_csv,
-            api_keys=api_keys_desc,
-            model_name=desc_model,
-        )
-        df_parsed = pd.read_csv(parsed_with_model_csv)
-        n_parsed = len(df_parsed)
-        if os.path.exists(output_csv):
-            df_final = pd.read_csv(output_csv)
-            n_final = len(df_final)
-            if n_final >= n_parsed:
-                logging.info(
-                    "final_products.csv найден и все строки обработаны, пропускаем инференс"
-                )
-                inference_time = None
-            else:
-                logging.info(
-                    f"final_products.csv найден, обработано {n_final} из {n_parsed} — доинференсим оставшиеся"
-                )
-                t_inf = time.time()
-                run_inference(parsed_csv=parsed_with_model_csv, output_csv=output_csv)
-                inference_time = time.time() - t_inf
-        else:
-            t_inf = time.time()
-            run_inference(parsed_csv=parsed_with_model_csv, output_csv=output_csv)
-            inference_time = time.time() - t_inf
-    else:
-        logging.warning("parsed_products.csv не найден, инференс невозможен")
-        inference_time = None
+    # if os.path.exists(parsed_csv):
+    #     # 1. LLM по описанию
+    #     parsed_with_model_csv = extract_model_from_description(
+    #         parsed_csv,
+    #         parsed_with_model_csv,
+    #         api_keys=api_keys_desc,
+    #         model_name=desc_model,
+    #     )
+    #     df_parsed = pd.read_csv(parsed_with_model_csv)
+    #     n_parsed = len(df_parsed)
+    #     if os.path.exists(output_csv):
+    #         df_final = pd.read_csv(output_csv)
+    #         n_final = len(df_final)
+    #         if n_final >= n_parsed:
+    #             logging.info(
+    #                 "final_products.csv найден и все строки обработаны, пропускаем инференс"
+    #             )
+    #             inference_time = None
+    #         else:
+    #             logging.info(
+    #                 f"final_products.csv найден, обработано {n_final} из {n_parsed} — доинференсим оставшиеся"
+    #             )
+    #             t_inf = time.time()
+    #             run_inference(parsed_csv=parsed_with_model_csv, output_csv=output_csv)
+    #             inference_time = time.time() - t_inf
+    #     else:
+    #         t_inf = time.time()
+    #         run_inference(parsed_csv=parsed_with_model_csv, output_csv=output_csv)
+    #         inference_time = time.time() - t_inf
+    # else:
+    #     logging.warning("parsed_products.csv не найден, инференс невозможен")
+    #     inference_time = None
 
     # Финальная сводка по времени
 
