@@ -6,11 +6,10 @@ import random
 import io
 from pathlib import Path
 
-
 PHOTO_ONE_MANY_PROMPT = (
     "If there is more than one unique physical car part visible, output 'many'. "
     "If there is only one unique physical car part, output 'one'. "
-    "Output only 'one' or 'many'. Do not explain your answer."
+    "Output only 'one' or 'many'. Do not explain your answer. "
     "If you don't know the answer, output 'unknown'."
 )
 
@@ -27,7 +26,7 @@ class GeminiPhotoOneManyInference:
                 "temperature": 0,
                 "top_p": 1,
                 "top_k": 1,
-                "max_output_tokens": 16,
+                "max_output_tokens": 32,  # увеличено, чтобы модель успевала вернуть ответ
             },
             safety_settings=[
                 {
@@ -58,9 +57,7 @@ class GeminiPhotoOneManyInference:
         self.configure_api()
         logging.info(f"[Photo LLM] Switched to API key index: {self.current_key_index}")
 
-
-    def get_response(self, img_data, retry=False):  
-        max_retries = 10
+    def get_response(self, img_data, max_retries=5):
         base_delay = 5
         for attempt in range(max_retries):
             try:
@@ -76,17 +73,18 @@ class GeminiPhotoOneManyInference:
                     }
                 }
 
-                time.sleep(random.uniform(1, 2))
+                time.sleep(
+                    random.uniform(1, 2)
+                )  # маленькая задержка, чтобы не забанили
                 response = self.model.generate_content([image_part])
-
                 logging.info(f"[Photo LLM] Full response: {response}")
 
-                # пробуем достать текст
+                # безопасно получаем текст из parts
                 answer_text = None
                 if response.candidates:
-                    parts = response.candidates[0].content.parts
-                    if parts:
-                        answer_text = parts[0].text
+                    cand = response.candidates[0]
+                    if cand.content and cand.content.parts:
+                        answer_text = cand.content.parts[0].text
 
                 if not answer_text:
                     logging.warning("[Photo LLM] Empty answer from model")
@@ -101,7 +99,8 @@ class GeminiPhotoOneManyInference:
                         self.switch_api_key()
                         delay = base_delay
                     logging.warning(
-                        f"[Photo LLM] Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds..."
+                        f"[Photo LLM] Rate limit reached. Attempt {attempt + 1}/{max_retries}. "
+                        f"Retrying in {delay:.2f} sec..."
                     )
                     time.sleep(delay)
                 else:
@@ -109,7 +108,7 @@ class GeminiPhotoOneManyInference:
                     raise
 
         logging.error("[Photo LLM] Max retries reached. Unable to get a response.")
-        raise Exception("Max retries reached. Unable to get a response.")
+        return None
 
     def __call__(self, image_path):
         self.configure_api()
@@ -125,7 +124,7 @@ class GeminiPhotoOneManyInference:
 
         max_attempts = 2
         for attempt in range(max_attempts):
-            answer = self.get_response(img_data, retry=(attempt > 0))
+            answer = self.get_response(img_data)
             if not answer:
                 logging.info("[Photo LLM] Empty answer, retrying...")
                 continue
@@ -134,5 +133,7 @@ class GeminiPhotoOneManyInference:
                 return answer
             logging.info(f"[Photo LLM] Invalid answer '{answer}', retrying...")
 
-        logging.warning("[Photo LLM] All attempts failed or only invalid answer found.")
+        logging.warning(
+            "[Photo LLM] All attempts failed or only invalid answers found."
+        )
         return "one"  # fallback
