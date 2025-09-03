@@ -84,6 +84,7 @@ class GeminiDescriptionInference:
             "If there are several part numbers in the format like 03C906057DK/BH/AR (with slashes, commas, spaces, etc.), extract the first 5 of them, separated by commas. "
             "If there are more than 5 part numbers, output only the first five, then write 'etc' after them. "
             "If you extract more than one unique part number, this is a clear sign that the last field should be 'many'. "
+            "If the numbers field contains more than one number (for example, if it contains a comma, a space between numbers, or the word 'and'), you MUST set the last field to 'many', even if you are not sure. "
             "Carefully read the text and, if there are any indirect signs that the seller is offering more than one physical item (e.g. words like 'set', 'kit', 'several', '2 pcs', 'for different models', 'multiple', 'набор', 'комплект', 'несколько', '2 шт', etc.), set the last field to 'many'. "
             "If you are not sure, set it to 'one'. "
             "If you cannot find a brand or number, write 'None'. "

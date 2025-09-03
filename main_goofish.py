@@ -34,7 +34,6 @@ def get_first_image(images_str):
     return None
 
 
-
 def extract_model_from_description(
     input_csv="parsed_products.csv",
     output_csv="parsed_products_with_model.csv",
@@ -325,8 +324,7 @@ def enrich_with_llm(
     и GeminiPhotoOneManyInference по первой картинке (one/many), сохраняет результат в новые столбцы.
     """
 
-
-    df = pd.read_csv(output_csv)
+    df = pd.read_csv(input_csv)
     photo_llm = GeminiPhotoOneManyInference(
         api_keys=photo_api_keys, model_name=photo_model
     )
