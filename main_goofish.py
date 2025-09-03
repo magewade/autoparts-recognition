@@ -1,19 +1,3 @@
-import ast
-
-
-# --- Вспомогательная функция для извлечения первого URL из строки-списка images
-def get_first_image(images_str):
-    try:
-        images_list = (
-            ast.literal_eval(images_str) if isinstance(images_str, str) else images_str
-        )
-        if isinstance(images_list, list) and images_list:
-            return images_list[0]
-    except Exception:
-        pass
-    return None
-
-
 from gemini_description_model import GeminiDescriptionInference
 from gemini_one_many_on_photo import GeminiPhotoOneManyInference
 import os
@@ -35,6 +19,20 @@ from dataprocessor_goofish import (
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
+
+# --- Вспомогательная функция для извлечения первого URL из строки-списка images
+def get_first_image(images_str):
+    try:
+        images_list = (
+            ast.literal_eval(images_str) if isinstance(images_str, str) else images_str
+        )
+        if isinstance(images_list, list) and images_list:
+            return images_list[0]
+    except Exception:
+        pass
+    return None
+
 
 
 def extract_model_from_description(
@@ -326,51 +324,8 @@ def enrich_with_llm(
     Для каждой строки вызывает GeminiDescriptionInference по description (модель, номер, one/many)
     и GeminiPhotoOneManyInference по первой картинке (one/many), сохраняет результат в новые столбцы.
     """
-    import pandas as pd
-    import ast
-    import time
-    from gemini_description_model import GeminiDescriptionInference
-    from gemini_one_many_on_photo import GeminiPhotoOneManyInference
 
-    # --- Этап 1: только описание ---
-    df = pd.read_csv(input_csv)
-    desc_llm = GeminiDescriptionInference(api_keys=desc_api_keys, model_name=desc_model)
-    desc_models, desc_numbers, desc_one_manys = [], [], []
-    for i, row in df.iterrows():
-        desc = str(row.get("description", ""))
-        desc_model, desc_number, desc_one_many = "unknown", "None", "one"
-        if desc.strip():
-            try:
-                desc_result = desc_llm(desc)
-                parts = [p.strip() for p in desc_result.split("|")]
-                if len(parts) == 3:
-                    desc_model, desc_number, desc_one_many = parts
-            except Exception as e:
-                logging.warning(f"Desc LLM error on row {i}: {e}")
-        desc_models.append(desc_model)
-        desc_numbers.append(desc_number)
-        desc_one_manys.append(desc_one_many)
-        if (i + 1) % 10 == 0:
-            df_temp = df.copy()
-            df_temp["desc_model"] = desc_models + [""] * (len(df) - len(desc_models))
-            df_temp["desc_number"] = desc_numbers + [""] * (len(df) - len(desc_numbers))
-            df_temp["desc_one_many"] = desc_one_manys + [""] * (
-                len(df) - len(desc_one_manys)
-            )
-            df_temp.to_csv(output_csv, index=False)
-            logging.info(
-                f"[LLM enrich] Промежуточные результаты по описанию сохранены в {output_csv}"
-            )
-        time.sleep(1.5)
-    df["desc_model"] = desc_models
-    df["desc_number"] = desc_numbers
-    df["desc_one_many"] = desc_one_manys
-    df.to_csv(output_csv, index=False)
-    logging.info(
-        f"[LLM enrich] Финальные результаты по описанию сохранены в {output_csv}"
-    )
 
-    # --- Этап 2: только фото ---
     df = pd.read_csv(output_csv)
     photo_llm = GeminiPhotoOneManyInference(
         api_keys=photo_api_keys, model_name=photo_model
