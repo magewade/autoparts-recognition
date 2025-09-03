@@ -60,13 +60,17 @@ class GeminiPhotoOneManyInference:
                 logging.info(f"[Photo LLM] Input image_url: {image_url}")
                 # Скачиваем картинку
                 response_img = requests.get(image_url, timeout=15)
-                logging.info(
-                    f"[Photo LLM] Downloaded image: {len(response_img.content)} bytes"
-                )
-                img = Image.open(BytesIO(response_img.content)).convert("RGB")
-                logging.info(f"[Photo LLM] Image size: {img.size}, mode: {img.mode}")
-                # Используем start_chat/send_message как во взрослой модели
-                image_parts = [img]
+                img_bytes = response_img.content
+                logging.info(f"[Photo LLM] Downloaded image: {len(img_bytes)} bytes")
+                # Формируем inline_data для Gemini Vision
+                image_parts = [
+                    {
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": img_bytes,
+                        }
+                    }
+                ]
                 prompt_parts = [prompt]
                 full_prompt = prompt_parts + image_parts
                 chat = self.model.start_chat(history=[])

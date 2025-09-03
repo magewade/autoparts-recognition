@@ -66,7 +66,6 @@ def extract_model_from_description(
             continue
         try:
             guess = llm(desc)
-            logging.info(f"[LLM desc] Строка {i}: результат Gemini: {guess}")
         except Exception as e:
             logging.warning(f"Gemini LLM error on row {i}: {e}")
             guess = "ERROR"
