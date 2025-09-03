@@ -191,6 +191,12 @@ def parse_args():
     parser.add_argument(
         "--max-links", type=int, default=90, help="Max product links to collect"
     )
+    parser.add_argument(
+        "--desc-model",
+        type=str,
+        default="gemini-2.5-flash-lite",
+        help="Gemini model for description LLM",
+    )
     args, _ = parser.parse_known_args()
     return args
 
@@ -240,7 +246,7 @@ def main():
         )
         times["collect_links"] = None
 
-    # ====== ВСЁ ПОСЛЕ ЭТОГО ЗАКОММЕНТИРОВАНО ======
+    # ====== ЗАКОММЕНТИРОВАНО ======
     # # 2. Сбор parsed_products.csv (если нет или не все ссылки обработаны)
     # t1 = time.time()
     # df_links = pd.read_csv("product_links.csv")
@@ -301,15 +307,14 @@ def main():
     #     logging.info("parsed_products.csv сформирован")
     # # Восстанавливаем logging.info
     # logging.info = orig_logging_info
-    # return runtime_logs, times
+    return runtime_logs, times
 
 
 if __name__ == "__main__":
     import time
 
     main_start = time.time()
-    # runtime_logs, times = main()
-    main()
+    runtime_logs, times = main()
 
     parsed_csv = "parsed_products.csv"
     parsed_with_model_csv = "parsed_products_with_model.csv"
