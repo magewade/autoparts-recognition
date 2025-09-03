@@ -8,9 +8,10 @@ from pathlib import Path
 
 
 PHOTO_ONE_MANY_PROMPT = (
-    "Look at the image. If there is more than one unique physical car part visible, output 'many'. "
+    "If there is more than one unique physical car part visible, output 'many'. "
     "If there is only one unique physical car part, output 'one'. "
     "Output only 'one' or 'many'. Do not explain your answer."
+    "If you don't know the answer, output 'unknown'."
 )
 
 
