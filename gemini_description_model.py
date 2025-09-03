@@ -1,3 +1,33 @@
+import re
+
+
+# --- Строгая постобработка результата LLM
+def clean_llm_output(guess):
+    # Убираем скобки и лишние символы
+    guess = guess.replace("[", "").replace("]", "")
+    parts = [p.strip() for p in guess.split("|")]
+    if len(parts) != 3:
+        return "unknown | None | one"
+    # Приводим model к unknown если any или none
+    model = parts[0].lower()
+    if model in ("any", "none", "unknown", ""):
+        model = "unknown"
+    # Парсим номера
+    numbers = [
+        n.strip()
+        for n in re.split(r",|/|\\|\s", parts[1])
+        if n.strip() and n.strip().lower() != "none"
+    ]
+    numbers_str = ", ".join(numbers) if numbers else "None"
+    # Если номеров больше одного, всегда many
+    one_or_many = parts[2].strip().lower()
+    if len(numbers) > 1:
+        one_or_many = "many"
+    elif one_or_many != "many":
+        one_or_many = "one"
+    return f"{model} | {numbers_str} | {one_or_many}"
+
+
 import google.generativeai as genai
 import logging
 import time
@@ -51,10 +81,10 @@ class GeminiDescriptionInference:
             "If there are several part numbers in the format like 03C906057DK/BH/AR (with slashes, commas, spaces, etc.), extract all of them, separated by commas. "
             "Carefully read the text and, if there are any indirect signs that the seller is offering more than one physical item (e.g. words like 'set', 'kit', 'several', '2 pcs', 'for different models', 'multiple', 'набор', 'комплект', 'несколько', '2 шт', etc.), set the last field to 'many'. "
             "If you are not sure, set it to 'one'. "
-            "If you cannot find a model or number, write 'None'"
-            "Output strictly in this format: [model] | [numbers] | [one_or_many]. "
+            "If you cannot find a model or number, write 'None'. "
+            "Output strictly in this format: model | numbers | one_or_many. "
             "Do not use any tags, brackets, or extra formatting. Only output the three fields separated by |. "
-            "Description: {desc}"
+            f"Description: {desc}"
         )
         max_retries = 5
         for attempt in range(max_retries):
@@ -63,11 +93,7 @@ class GeminiDescriptionInference:
                 guess = response.text.strip()
                 logging.info(f"[LLM desc] Ответ: {guess}")
                 time.sleep(2.1)  # <= 30 запросов в минуту
-                # Приводим к строгому формату: model | number | one_or_many
-                parts = [p.strip() for p in guess.split("|")]
-                # one_or_many строго one/many
-                parts[2] = "many" if parts[2].lower() == "many" else "one"
-                return " | ".join(parts)
+                return clean_llm_output(guess)
             except Exception as e:
                 if "quota" in str(e).lower():
                     self.switch_api_key()
