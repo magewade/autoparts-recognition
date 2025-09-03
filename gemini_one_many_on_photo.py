@@ -27,7 +27,7 @@ class GeminiPhotoOneManyInference:
                 "temperature": 0,
                 "top_p": 1,
                 "top_k": 1,
-                "max_output_tokens": 8,
+                "max_output_tokens": 16,
             },
             safety_settings=[
                 {
@@ -58,7 +58,8 @@ class GeminiPhotoOneManyInference:
         self.configure_api()
         logging.info(f"[Photo LLM] Switched to API key index: {self.current_key_index}")
 
-    def get_response(self, img_data, retry=False):
+
+    def get_response(self, img_data, retry=False):  
         max_retries = 10
         base_delay = 5
         for attempt in range(max_retries):
@@ -67,32 +68,32 @@ class GeminiPhotoOneManyInference:
                     image_bytes = img_data.getvalue()
                 else:
                     image_bytes = img_data.read_bytes()
+
                 image_part = {
                     "inline_data": {
                         "mime_type": "image/jpeg",
                         "data": image_bytes,
                     }
                 }
-                full_prompt = [image_part]
+
                 time.sleep(random.uniform(1, 2))
-                response = self.model.generate_content(full_prompt)
-                try:
-                    logging.info(f"[Photo LLM] Full response object: {response}")
-                    chat = self.model.start_chat(history=[])
-                    response = chat.send_message(full_prompt)
-                    logging.info(
-                        f"[Photo LLM] Response candidates: {response.candidates}"
-                    )
-                except Exception as log_exc:
-                    logging.warning(
-                        f"[Photo LLM] Could not log full response: {log_exc}"
-                    )
-                answer_text = getattr(response, "text", None)
-                logging.info(f"[Photo LLM] Main model response: {answer_text}")
+                response = self.model.generate_content([image_part])
+
+                logging.info(f"[Photo LLM] Full response: {response}")
+
+                # пробуем достать текст
+                answer_text = None
+                if response.candidates:
+                    parts = response.candidates[0].content.parts
+                    if parts:
+                        answer_text = parts[0].text
+
                 if not answer_text:
                     logging.warning("[Photo LLM] Empty answer from model")
                     return None
+
                 return answer_text.strip().lower()
+
             except Exception as e:
                 if "quota" in str(e).lower():
                     delay = base_delay * (2**attempt) + random.uniform(0, 1)
@@ -106,6 +107,7 @@ class GeminiPhotoOneManyInference:
                 else:
                     logging.error(f"[Photo LLM] Error in get_response: {str(e)}")
                     raise
+
         logging.error("[Photo LLM] Max retries reached. Unable to get a response.")
         raise Exception("Max retries reached. Unable to get a response.")
 
