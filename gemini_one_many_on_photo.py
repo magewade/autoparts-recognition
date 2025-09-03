@@ -15,7 +15,7 @@ PHOTO_ONE_MANY_PROMPT = (
 
 
 class GeminiPhotoOneManyInference:
-    def __init__(self, api_keys, model_name="gemini-2.5-flash"):
+    def __init__(self, api_keys, model_name="gemini-2.5-flash-light"):
         self.api_keys = api_keys
         self.current_key_index = 0
         self.model_name = model_name
@@ -59,16 +59,19 @@ class GeminiPhotoOneManyInference:
     def get_response(self, img_data, retry=False):
         max_retries = 10
         base_delay = 5
+
         for attempt in range(max_retries):
             try:
+                # Получаем чистые байты
+                if isinstance(img_data, io.BytesIO):
+                    image_bytes = img_data.getvalue()
+                else:  # Path
+                    image_bytes = img_data.read_bytes()
+
                 image_part = {
                     "inline_data": {
                         "mime_type": "image/jpeg",
-                        "data": (
-                            img_data.getvalue()
-                            if isinstance(img_data, io.BytesIO)
-                            else img_data.read_bytes()
-                        ),
+                        "data": image_bytes,
                     }
                 }
 
@@ -127,6 +130,7 @@ class GeminiPhotoOneManyInference:
         self.configure_api()
         if image_path.startswith("http"):
             response = requests.get(image_path, stream=True)
+            response.raise_for_status()
             img_data = io.BytesIO(response.content)
         else:
             img = Path(image_path)
