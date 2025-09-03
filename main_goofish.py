@@ -1,29 +1,20 @@
-import ast
-
-from gemini_model import GeminiInference
-import pandas as pd
-import time
-import logging
-
-from picker_model import TargetModel
-from gemini_model import GeminiInference
-import pandas as pd
-import logging
-import argparse
-import time
-import re
-
-import logging
-import pandas as pd
+from gemini_description_model import GeminiDescriptionInference
+from gemini_one_many_on_photo import GeminiPhotoOneManyInference
 import os
+import ast
+import time
+import logging
 import argparse
+import pandas as pd
+
 from config import Config
+from gemini_model import GeminiInference
+from picker_model import TargetModel
 from dataprocessor_goofish import (
     Processor,
     GoofishParserPlaywrightAsync,
     enrich_dataframe_playwright_async,
 )
-
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -48,7 +39,6 @@ def extract_model_from_description(
         if "description_model_guess" in df_out.columns and len(df_out) == len(df):
             logging.info(f"{output_csv} найден, пропускаем LLM по описанию")
             return output_csv
-    from gemini_description_model import GeminiDescriptionInference
 
     llm = GeminiDescriptionInference(api_keys=api_keys, model_name=model_name)
     logging.info(f"[LLM desc] Используемая модель: {model_name}")
@@ -87,7 +77,7 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
     parser.add_argument(
         "--gemini-api-model",
         type=str,
-        default="gemini-2.5-pro",
+        default="gemini-2.5-flash",
         help="Gemini model name",
     )
     parser.add_argument("--car-brand", type=str, default=None, help="Car brand")
@@ -272,7 +262,7 @@ def main():
                 raise Exception("No href/url column in product_links.csv")
             parser = GoofishParserPlaywrightAsync()
             import asyncio
-    
+
             # Парсим только недостающие строки
             t1 = time.time()
             df_for_parse = df_for_parse.iloc[n_parsed:]
@@ -295,7 +285,7 @@ def main():
             raise Exception("No href/url column in product_links.csv")
         parser = GoofishParserPlaywrightAsync()
         import asyncio
-    
+
         t1 = time.time()
         df_result = asyncio.run(
             enrich_dataframe_playwright_async(
@@ -309,52 +299,90 @@ def main():
     return runtime_logs, times
 
 
-if __name__ == "__main__":
+def enrich_with_llm(
+    input_csv="parsed_products.csv",
+    output_csv="parsed_products_with_llm.csv",
+    desc_api_keys=None,
+    desc_model="gemini-2.5-flash-lite",
+    photo_api_keys=None,
+    photo_model="gemini-2.5-flash-lite",
+):
+    """
+    Для каждой строки вызывает GeminiDescriptionInference по description (модель, номер, one/many)
+    и GeminiPhotoOneManyInference по первой картинке (one/many), сохраняет результат в новые столбцы.
+    """
+    import pandas as pd
+    import ast
     import time
+    from gemini_description_model import GeminiDescriptionInference
+    from gemini_one_many_on_photo import GeminiPhotoOneManyInference
 
-    main_start = time.time()
-    runtime_logs, times = main()
+    df = pd.read_csv(input_csv)
+    desc_llm = GeminiDescriptionInference(api_keys=desc_api_keys, model_name=desc_model)
+    photo_llm = GeminiPhotoOneManyInference(
+        api_keys=photo_api_keys, model_name=photo_model
+    )
 
+    desc_models, desc_numbers, desc_one_manys, photo_one_manys = [], [], [], []
+
+    for i, row in df.iterrows():
+        # Описание
+        desc = str(row.get("description", ""))
+        desc_model, desc_number, desc_one_many = "unknown", "None", "one"
+        if desc.strip():
+            try:
+                desc_result = desc_llm(desc)
+                parts = [p.strip() for p in desc_result.split("|")]
+                if len(parts) == 3:
+                    desc_model, desc_number, desc_one_many = parts
+            except Exception as e:
+                logging.warning(f"Desc LLM error on row {i}: {e}")
+        desc_models.append(desc_model)
+        desc_numbers.append(desc_number)
+        desc_one_manys.append(desc_one_many)
+
+        # Фото
+        images = row.get("images", "[]")
+        photo_one_many = "one"
+        try:
+            images_list = (
+                ast.literal_eval(images) if isinstance(images, str) else images
+            )
+            if images_list and isinstance(images_list, list) and images_list[0]:
+                photo_one_many = photo_llm(images_list[0])
+        except Exception as e:
+            logging.warning(f"Photo LLM error on row {i}: {e}")
+        photo_one_manys.append(photo_one_many)
+
+        # Промежуточное сохранение
+        if (i + 1) % 10 == 0:
+            df_temp = df.copy()
+            df_temp["desc_model"] = desc_models + [""] * (len(df) - len(desc_models))
+            df_temp["desc_number"] = desc_numbers + [""] * (len(df) - len(desc_numbers))
+            df_temp["desc_one_many"] = desc_one_manys + [""] * (
+                len(df) - len(desc_one_manys)
+            )
+            df_temp["photo_one_many"] = photo_one_manys + [""] * (
+                len(df) - len(photo_one_manys)
+            )
+            df_temp.to_csv(output_csv, index=False)
+            logging.info(
+                f"[LLM enrich] Промежуточные результаты сохранены в {output_csv}"
+            )
+        time.sleep(1.5)  # чтобы не превышать лимит
+
+    df["desc_model"] = desc_models
+    df["desc_number"] = desc_numbers
+    df["desc_one_many"] = desc_one_manys
+    df["photo_one_many"] = photo_one_manys
+    df.to_csv(output_csv, index=False)
+    logging.info(f"[LLM enrich] Финальные результаты сохранены в {output_csv}")
+
+
+def run_full_pipeline(cli_args):
     parsed_csv = "parsed_products.csv"
     parsed_with_model_csv = "parsed_products_with_model.csv"
     output_csv = "final_products.csv"
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--api-keys", nargs="+", required=True, help="List of API keys to use"
-    )
-    parser.add_argument(
-        "--gemini-api-model",
-        type=str,
-        default="gemini-2.5-flash",
-        help="Gemini model name",
-    )
-    parser.add_argument("--car-brand", type=str, default=None, help="Car brand")
-    parser.add_argument(
-        "--prompt_override", type=str, default=None, help="Prompt override"
-    )
-    parser.add_argument(
-        "--save-file-name",
-        type=str,
-        default="final_products",
-        help="Output CSV base name",
-    )
-    parser.add_argument("--max-steps", type=int, default=3, help="Max pages to parse")
-    parser.add_argument(
-        "--max-links", type=int, default=90, help="Max product links to collect"
-    )
-    parser.add_argument(
-        "--desc-api-keys",
-        nargs="+",
-        default=None,
-        help="API keys for description LLM (optional)",
-    )
-    parser.add_argument(
-        "--desc-model",
-        type=str,
-        default="gemini-2.5-flash-lite",
-        help="Gemini model for description LLM",
-    )
-    cli_args, _ = parser.parse_known_args()
 
     api_keys = cli_args.api_keys
     desc_model = cli_args.desc_model
@@ -363,38 +391,100 @@ if __name__ == "__main__":
     else:
         api_keys_desc = api_keys
 
-    # if os.path.exists(parsed_csv):
-    #     # 1. LLM по описанию
-    #     parsed_with_model_csv = extract_model_from_description(
-    #         parsed_csv,
-    #         parsed_with_model_csv,
-    #         api_keys=api_keys_desc,
-    #         model_name=desc_model,
-    #     )
-    #     df_parsed = pd.read_csv(parsed_with_model_csv)
-    #     n_parsed = len(df_parsed)
-    #     if os.path.exists(output_csv):
-    #         df_final = pd.read_csv(output_csv)
-    #         n_final = len(df_final)
-    #         if n_final >= n_parsed:
-    #             logging.info(
-    #                 "final_products.csv найден и все строки обработаны, пропускаем инференс"
-    #             )
-    #             inference_time = None
-    #         else:
-    #             logging.info(
-    #                 f"final_products.csv найден, обработано {n_final} из {n_parsed} — доинференсим оставшиеся"
-    #             )
-    #             t_inf = time.time()
-    #             run_inference(parsed_csv=parsed_with_model_csv, output_csv=output_csv)
-    #             inference_time = time.time() - t_inf
-    #     else:
-    #         t_inf = time.time()
-    #         run_inference(parsed_csv=parsed_with_model_csv, output_csv=output_csv)
-    #         inference_time = time.time() - t_inf
-    # else:
-    #     logging.warning("parsed_products.csv не найден, инференс невозможен")
-    #     inference_time = None
+    if os.path.exists(parsed_csv):
+        # 1. LLM по описанию
+        parsed_with_model_csv = extract_model_from_description(
+            parsed_csv,
+            parsed_with_model_csv,
+            api_keys=api_keys_desc,
+            model_name=desc_model,
+        )
+        df_parsed = pd.read_csv(parsed_with_model_csv)
+        n_parsed = len(df_parsed)
+
+        # --- enrich_with_llm: обогащение по описанию и первой картинке ---
+        enrich_with_llm(
+            input_csv=parsed_with_model_csv,
+            output_csv="parsed_products_with_llm.csv",
+            desc_api_keys=api_keys_desc,
+            desc_model=desc_model,
+            photo_api_keys=api_keys,
+            photo_model=cli_args.gemini_api_model,
+        )
+        if os.path.exists(output_csv):
+            df_final = pd.read_csv(output_csv)
+            n_final = len(df_final)
+            if n_final >= n_parsed:
+                logging.info(
+                    "final_products.csv найден и все строки обработаны, пропускаем инференс"
+                )
+                inference_time = None
+            else:
+                logging.info(
+                    f"final_products.csv найден, обработано {n_final} из {n_parsed} — доинференсим оставшиеся"
+                )
+                t_inf = time.time()
+                run_inference(parsed_csv=parsed_with_model_csv, output_csv=output_csv)
+                inference_time = time.time() - t_inf
+        else:
+            t_inf = time.time()
+            run_inference(parsed_csv=parsed_with_model_csv, output_csv=output_csv)
+            inference_time = time.time() - t_inf
+    else:
+        logging.warning("parsed_products.csv не найден, инференс невозможен")
+        inference_time = None
+
+    return inference_time
+
+
+if __name__ == "__main__":
+    import time
+
+    main_start = time.time()
+    runtime_logs, times = main()
+
+    cli_parser = argparse.ArgumentParser()
+    cli_parser.add_argument(
+        "--api-keys", nargs="+", required=True, help="List of API keys to use"
+    )
+    cli_parser.add_argument(
+        "--gemini-api-model",
+        type=str,
+        default="gemini-2.5-flash",
+        help="Gemini model name",
+    )
+    cli_parser.add_argument("--car-brand", type=str, default=None, help="Car brand")
+    cli_parser.add_argument(
+        "--prompt_override", type=str, default=None, help="Prompt override"
+    )
+    cli_parser.add_argument(
+        "--save-file-name",
+        type=str,
+        default="final_products",
+        help="Output CSV base name",
+    )
+    cli_parser.add_argument(
+        "--max-steps", type=int, default=3, help="Max pages to parse"
+    )
+    cli_parser.add_argument(
+        "--max-links", type=int, default=90, help="Max product links to collect"
+    )
+    cli_parser.add_argument(
+        "--desc-api-keys",
+        nargs="+",
+        default=None,
+        help="API keys for description LLM (optional)",
+    )
+    cli_parser.add_argument(
+        "--desc-model",
+        type=str,
+        default="gemini-2.5-flash-lite",
+        help="Gemini model for description LLM",
+    )
+    cli_args = cli_parser.parse_args()
+
+    # Запуск пайплайна
+    inference_time = run_full_pipeline(cli_args)
 
     # Финальная сводка по времени
 
