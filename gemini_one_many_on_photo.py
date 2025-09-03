@@ -26,7 +26,7 @@ class GeminiPhotoOneManyInference:
                 "temperature": 0,
                 "top_p": 1,
                 "top_k": 1,
-                "max_output_tokens": 32,  # увеличено, чтобы модель успевала вернуть ответ
+                "max_output_tokens": 1000,  # увеличено, чтобы модель успевала вернуть ответ
             },
             safety_settings=[
                 {
