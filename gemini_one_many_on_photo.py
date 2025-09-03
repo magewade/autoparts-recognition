@@ -60,24 +60,23 @@ class GeminiPhotoOneManyInference:
                 # Скачиваем картинку
                 response_img = requests.get(image_url, timeout=15)
                 img = Image.open(BytesIO(response_img.content)).convert("RGB")
-                # Отправляем картинку и промпт в LLM
-                gemini_response = self.model.generate_content([prompt, img])
-                # Проверяем, есть ли Part (иначе .text вызовет ошибку)
-                if not hasattr(gemini_response, "text") or gemini_response.text is None:
-                    # Проверяем finish_reason если возможно
-                    finish_reason = getattr(gemini_response, "candidates", [{}])[0].get(
-                        "finish_reason", None
-                    )
+                # Используем start_chat/send_message как во взрослой модели
+                image_parts = [img]
+                prompt_parts = [prompt]
+                full_prompt = prompt_parts + image_parts
+                chat = self.model.start_chat(history=[])
+                response = chat.send_message(full_prompt)
+                answer = getattr(response, "text", None)
+                if not answer:
                     logging.warning(
-                        f"[Photo LLM] No valid Part in response for image {image_url}. finish_reason={finish_reason}"
+                        f"[Photo LLM] No valid text in response for image {image_url}."
                     )
                     return "ERROR"
-                answer = gemini_response.text.strip().lower()
+                answer = answer.strip().lower()
                 logging.info(f"[LLM photo one/many] Ответ: {answer}")
                 time.sleep(2.1)
                 if answer in ("one", "many"):
                     return answer
-                # Если невалидно — fallback
                 return "one"
             except Exception as e:
                 if "quota" in str(e).lower():
