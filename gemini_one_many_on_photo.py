@@ -6,15 +6,13 @@ import random
 import io
 
 PHOTO_ONE_MANY_PROMPT = (
-    "You are an expert in analyzing car part images. "
-    "Look at the image and answer strictly 'one' if there is only one unique physical car part on the photo, "
-    "or 'many' if there are several different physical car parts visible. "
-    "Do not explain your answer, do not use any tags or extra text. Only output 'one' or 'many'."
+    "Look at the image. If there is more than one unique physical car part visible, output 'many'. "
+    "If there is only one unique physical car part, output 'one'. Output only 'one' or 'many'. Do not explain your answer."
 )
 
 
 class GeminiPhotoOneManyInference:
-    def __init__(self, api_keys, model_name="gemini-2.5-flash-lite"):
+    def __init__(self, api_keys, model_name="gemini-2.5-flash"):
         self.api_keys = api_keys
         self.current_key_index = 0
         self.model_name = model_name
