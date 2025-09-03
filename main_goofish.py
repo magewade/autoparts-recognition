@@ -333,16 +333,11 @@ def enrich_with_llm(
     from gemini_description_model import GeminiDescriptionInference
     from gemini_one_many_on_photo import GeminiPhotoOneManyInference
 
+    # --- Этап 1: только описание ---
     df = pd.read_csv(input_csv)
     desc_llm = GeminiDescriptionInference(api_keys=desc_api_keys, model_name=desc_model)
-    photo_llm = GeminiPhotoOneManyInference(
-        api_keys=photo_api_keys, model_name=photo_model
-    )
-
-    desc_models, desc_numbers, desc_one_manys, photo_one_manys = [], [], [], []
-
+    desc_models, desc_numbers, desc_one_manys = [], [], []
     for i, row in df.iterrows():
-        # Описание
         desc = str(row.get("description", ""))
         desc_model, desc_number, desc_one_many = "unknown", "None", "one"
         if desc.strip():
@@ -356,8 +351,33 @@ def enrich_with_llm(
         desc_models.append(desc_model)
         desc_numbers.append(desc_number)
         desc_one_manys.append(desc_one_many)
+        if (i + 1) % 10 == 0:
+            df_temp = df.copy()
+            df_temp["desc_model"] = desc_models + [""] * (len(df) - len(desc_models))
+            df_temp["desc_number"] = desc_numbers + [""] * (len(df) - len(desc_numbers))
+            df_temp["desc_one_many"] = desc_one_manys + [""] * (
+                len(df) - len(desc_one_manys)
+            )
+            df_temp.to_csv(output_csv, index=False)
+            logging.info(
+                f"[LLM enrich] Промежуточные результаты по описанию сохранены в {output_csv}"
+            )
+        time.sleep(1.5)
+    df["desc_model"] = desc_models
+    df["desc_number"] = desc_numbers
+    df["desc_one_many"] = desc_one_manys
+    df.to_csv(output_csv, index=False)
+    logging.info(
+        f"[LLM enrich] Финальные результаты по описанию сохранены в {output_csv}"
+    )
 
-        # Фото
+    # --- Этап 2: только фото ---
+    df = pd.read_csv(output_csv)
+    photo_llm = GeminiPhotoOneManyInference(
+        api_keys=photo_api_keys, model_name=photo_model
+    )
+    photo_one_manys = []
+    for i, row in df.iterrows():
         images = row.get("images", "[]")
         photo_one_many = "one"
         try:
@@ -367,30 +387,19 @@ def enrich_with_llm(
         except Exception as e:
             logging.warning(f"Photo LLM error on row {i}: {e}")
         photo_one_manys.append(photo_one_many)
-
-        # Промежуточное сохранение
         if (i + 1) % 10 == 0:
             df_temp = df.copy()
-            df_temp["desc_model"] = desc_models + [""] * (len(df) - len(desc_models))
-            df_temp["desc_number"] = desc_numbers + [""] * (len(df) - len(desc_numbers))
-            df_temp["desc_one_many"] = desc_one_manys + [""] * (
-                len(df) - len(desc_one_manys)
-            )
             df_temp["photo_one_many"] = photo_one_manys + [""] * (
                 len(df) - len(photo_one_manys)
             )
             df_temp.to_csv(output_csv, index=False)
             logging.info(
-                f"[LLM enrich] Промежуточные результаты сохранены в {output_csv}"
+                f"[LLM enrich] Промежуточные результаты по фото сохранены в {output_csv}"
             )
-        time.sleep(1.5)  # чтобы не превышать лимит
-
-    df["desc_model"] = desc_models
-    df["desc_number"] = desc_numbers
-    df["desc_one_many"] = desc_one_manys
+        time.sleep(1.5)
     df["photo_one_many"] = photo_one_manys
     df.to_csv(output_csv, index=False)
-    logging.info(f"[LLM enrich] Финальные результаты сохранены в {output_csv}")
+    logging.info(f"[LLM enrich] Финальные результаты по фото сохранены в {output_csv}")
 
 
 def run_full_pipeline(cli_args):

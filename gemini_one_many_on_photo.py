@@ -7,7 +7,7 @@ from io import BytesIO
 
 
 class GeminiPhotoOneManyInference:
-    def __init__(self, api_keys, model_name="gemini-2.5-flash"):
+    def __init__(self, api_keys, model_name="gemini-2.5-flash-lite"):
         self.api_keys = api_keys
         self.current_key_index = 0
         self.model_name = model_name
