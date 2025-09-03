@@ -78,10 +78,11 @@ class GeminiPhotoOneManyInference:
                 response = self.model.generate_content(full_prompt)
                 try:
                     logging.info(f"[Photo LLM] Full response object: {response}")
-                    if hasattr(response, "candidates"):
-                        logging.info(
-                            f"[Photo LLM] Response candidates: {response.candidates}"
-                        )
+                    chat = self.model.start_chat(history=[])
+                    response = chat.send_message(full_prompt)
+                    logging.info(
+                        f"[Photo LLM] Response candidates: {response.candidates}"
+                    )
                 except Exception as log_exc:
                     logging.warning(
                         f"[Photo LLM] Could not log full response: {log_exc}"
