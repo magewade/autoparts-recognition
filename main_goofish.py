@@ -323,7 +323,6 @@ def run_full_pipeline(cli_args):
         api_keys_desc = api_keys
 
     if os.path.exists(parsed_csv):
-        # 1. LLM по описанию
         parsed_with_model_csv = extract_model_from_description(
             parsed_csv,
             parsed_with_model_csv,
@@ -333,24 +332,41 @@ def run_full_pipeline(cli_args):
         df_parsed = pd.read_csv(parsed_with_model_csv)
         n_parsed = len(df_parsed)
 
+        # --- Разделение на many/one по description_model_guess ---
+        def get_one_many(val):
+            try:
+                return str(val).split("|")[2].strip().lower()
+            except Exception:
+                return "one"
+
+        mask_many = df_parsed["description_model_guess"].apply(get_one_many) == "many"
+        df_many = df_parsed[mask_many].copy()
+        df_one = df_parsed[~mask_many].copy()
+        df_many.to_csv("products_many.csv", index=False)
+        df_one.to_csv("products_one.csv", index=False)
+        logging.info(
+            f"Сохранено: products_many.csv (many: {len(df_many)}), products_one.csv (one: {len(df_one)})"
+        )
+
+        # --- Дальнейший пайплайн только для one ---
         if os.path.exists(output_csv):
             df_final = pd.read_csv(output_csv)
             n_final = len(df_final)
-            if n_final >= n_parsed:
+            if n_final >= len(df_one):
                 logging.info(
                     "final_products.csv найден и все строки обработаны, пропускаем инференс"
                 )
                 inference_time = None
             else:
                 logging.info(
-                    f"final_products.csv найден, обработано {n_final} из {n_parsed} — доинференсим оставшиеся"
+                    f"final_products.csv найден, обработано {n_final} из {len(df_one)} — доинференсим оставшиеся"
                 )
                 t_inf = time.time()
-                run_inference(parsed_csv=parsed_with_model_csv, output_csv=output_csv)
+                run_inference(parsed_csv="products_one.csv", output_csv=output_csv)
                 inference_time = time.time() - t_inf
         else:
             t_inf = time.time()
-            run_inference(parsed_csv=parsed_with_model_csv, output_csv=output_csv)
+            run_inference(parsed_csv="products_one.csv", output_csv=output_csv)
             inference_time = time.time() - t_inf
     else:
         logging.warning("parsed_products.csv не найден, инференс невозможен")
