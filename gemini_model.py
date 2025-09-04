@@ -27,7 +27,7 @@ Your task:
 1. Use all information above to help you analyze the image. If any field is missing or 'None', try to fill it using the image.
 2. If a brand is given, use it to help identify relevant numbers or text in the image. If not, try to infer the brand/model from the image.
 3. If part/model numbers are given, check if they appear in the image. If not, try to find a new plausible OEM-like number (9-15 characters, mix of letters and digits, not a date or batch code). If you find a better or additional number, update the field accordingly.
-4. If the description said 'many', check if the image also shows multiple different part/model numbers or items. If so, set the last field to True. If only one, set to False.
+4. If the description said 'many', check if the image also shows multiple different part/model numbers or items. If so, set the last field to 'many'. If only one, set to 'one'.
 5. Always double-check for character confusion: '1' vs 'I', '0' vs 'O', etc.
 6. Ignore numbers that are clearly dates, serials, or batch codes unless no other candidates exist.
 
@@ -163,37 +163,31 @@ class GeminiInference:
 
         for attempt in range(max_retries):
             try:
-                image_parts = [
-                    {
-                        "inline_data": {
-                            "mime_type": "image/jpeg",
-                            "data": (
-                                img_data.getvalue()
-                                if isinstance(img_data, io.BytesIO)
-                                else img_data.read_bytes()
-                            ),
-                        }
-                    },
-                ]
-
-                prompt_parts = (
-                    []
-                    if not retry
-                    else [
+                image_part = {
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": (
+                            img_data.getvalue()
+                            if isinstance(img_data, io.BytesIO)
+                            else img_data.read_bytes()
+                        ),
+                    }
+                }
+                # Всегда первым идёт текстовый промпт, затем картинка
+                prompt_parts = [self.system_prompt, image_part]
+                if retry:
+                    prompt_parts.append(
                         "It is not correct. Try again. Look for the numbers that are highly OEM number"
-                    ]
-                )
-
-                full_prompt = image_parts + prompt_parts
+                    )
 
                 time.sleep(random.uniform(1, 3))
 
                 chat = self.model.start_chat(history=self.message_history)
-                response = chat.send_message(full_prompt)
+                response = chat.send_message(prompt_parts)
 
                 logging.info(f"Main model response: {response.text}")
 
-                self.message_history.append({"role": "user", "parts": full_prompt})
+                self.message_history.append({"role": "user", "parts": prompt_parts})
                 self.message_history.append({"role": "model", "parts": [response.text]})
 
                 return response.text
@@ -318,8 +312,8 @@ class GeminiInference:
 
             logging.info(f"Attempt {attempt + 1}: Extracted number: {extracted_number}")
 
-            # Если результат не "None | None | False", считаем его валидным и возвращаем сразу
-            if extracted_number.strip().lower() != "none | none | false":
+            # Если результат не "None | None | unknown", считаем его валидным и возвращаем сразу
+            if extracted_number.strip().lower() != "none | none | none":
                 self.reset_incorrect_predictions()
                 return extracted_number
 
@@ -332,4 +326,4 @@ class GeminiInference:
         logging.warning("All attempts failed or only None found.")
         self.reset_incorrect_predictions()
         # Возвращаем всегда 3 поля, если ничего не найдено
-        return "None | None | False"
+        return "None | None | None"
