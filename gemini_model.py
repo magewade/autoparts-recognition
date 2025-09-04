@@ -60,13 +60,11 @@ class GeminiInference:
 
         self.api_keys = api_keys
         self.current_key_index = 0
-        self.prompts = self.load_prompts()
-        # Подставляем значения в промпт
-        base_prompt = self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
+        # Всегда используем только DEFAULT_PROMPT
         logging.info(
             f"[GeminiInference] Description info for prompt: brand='{car_brand}', numbers='{desc_numbers}', one_many='{desc_one_many}'"
         )
-        prompt_filled = base_prompt.format(
+        prompt_filled = DEFAULT_PROMPT.format(
             car_brand=car_brand if car_brand is not None else "None",
             desc_numbers=desc_numbers if desc_numbers is not None else "None",
             desc_one_many=desc_one_many if desc_one_many is not None else "None",
@@ -96,12 +94,7 @@ class GeminiInference:
             },
         ]
 
-        # self.system_prompt = self.prompts.get(self.car_brand, {}).get(
-        #     "main_prompt"
-        # ) or self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
-        self.system_prompt = self.prompts.get("all", {}).get(
-            "main_prompt", DEFAULT_PROMPT
-        )
+        # Всегда используем только DEFAULT_PROMPT
 
         self.model = genai.GenerativeModel(
             model_name=model_name,
