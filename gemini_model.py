@@ -26,17 +26,20 @@ One_or_many: {desc_one_many}
 Your task:
 1. Use all information above to help you analyze the image. If any field is missing or 'None', try to fill it using the image.
 2. If a brand is given, use it to help identify relevant numbers or text in the image. If not, try to infer the brand/model from the image.
-3. If part/model numbers are given, check if they appear in the image. If not, try to find a new plausible OEM-like number (9-15 characters, mix of letters and digits, not a date or batch code). If you find a better or additional number, update the field accordingly.
-4. If the description said 'many', check if the image also shows multiple different part/model numbers or items. If so, set the last field to 'many'. If only one, set to 'one'.
-5. Always double-check for character confusion: '1' vs 'I', '0' vs 'O', etc.
-6. Ignore numbers that are clearly dates, serials, or batch codes unless no other candidates exist.
+3. Your main goal is to extract the main serial (OEM) part number for each physical object visible in the image. This number is unique for each part, usually 9-15 characters, contains both letters and digits, and is not a date, batch, or random short code. Ignore any numbers that are not plausible serial/OEM part numbers.
+4. If there is only one physical object (part) in the image, output its main serial/OEM part number in the second field, and set the last field to 'one'.
+5. If there are clearly multiple separate physical objects (for example, several identical or different parts, or a set/kit of parts), output the main serial/OEM part number for each object (comma-separated), and set the last field to 'many'.
+6. Do NOT set 'many' just because you see several numbers on one part. Only set 'many' if there are multiple distinct physical objects/parts visible.
+7. If you are not sure, default to 'one'.
+8. Always double-check for character confusion: '1' vs 'I', '0' vs 'O', etc.
+9. Ignore numbers that are clearly dates, serials, or batch codes unless no other candidates exist.
 
 Output strictly in this format (always in English, always 3 fields, always separated by |):
 <START> [Brand/Model Guess] | [Model/Part Number(s)] | [one/many] <END>
 
 - [Brand/Model Guess]: The car brand/model you used (from description or inferred from image), or None.
-- [Model/Part Number(s)]: The most likely part/model number(s) found (from description or image), or None.
-- [one/many]: Write 'many' if you see more than one plausible part/model number or item in the image, or if the numbers field contains more than one number (comma, space, or 'and'). Also set 'many' if there are indirect signs of multiple items (e.g. 'set', 'kit', 'several', '2 pcs', 'for different models', 'multiple', 'набор', 'комплект', 'несколько', '2 шт', etc.). If you are not sure, write 'one'.
+- [Model/Part Number(s)]: The main serial/OEM part number(s) found (from description or image), or None. If there are multiple physical objects, separate numbers with commas.
+- [one/many]: Write 'many' only if there are multiple separate physical objects/parts visible in the image. If only one part is visible (even with several numbers), write 'one'. If unsure, write 'one'.
 
 If you don't know a value, write None. Do not output anything else except the required 3 fields in the specified format. Always answer in English.
 """

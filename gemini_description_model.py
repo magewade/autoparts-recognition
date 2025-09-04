@@ -1,4 +1,7 @@
 import re
+import google.generativeai as genai
+import logging
+import time
 
 
 # --- Строгая постобработка результата LLM
@@ -26,11 +29,6 @@ def clean_llm_output(guess):
     elif one_or_many != "many":
         one_or_many = "one"
     return f"{model} | {numbers_str} | {one_or_many}"
-
-
-import google.generativeai as genai
-import logging
-import time
 
 
 class GeminiDescriptionInference:
@@ -80,12 +78,12 @@ class GeminiDescriptionInference:
             "Extract the car brand (not a specific model or modification) and all part numbers from the following description. "
             "If the model name is written in a language other than English (for example, in Chinese), always translate or adapt it to the most common English name for that car brand. "
             "If the description mentions a specific model (like Rio, Golf, Camry, etc.), output only the general brand (like Kia, Volkswagen, Toyota, etc.) in the first field. "
-            "Extract only numbers that look like real serial part numbers: they are usually 9 to 15 characters long, contain both letters and digits, and cannot be short (for example, three-digit numbers are not valid). Ignore numbers that are clearly too short or do not match this pattern."
+            "Extract only numbers that look like real serial part numbers: they are usually 9 to 15 characters long, contain both letters and digits, and cannot be short (for example, three-four-digit numbers are not valid). Ignore numbers that are clearly too short or do not match this pattern."
             "If there are several part numbers in the format like 03C906057DK/BH/AR (with slashes, commas, spaces, etc.), extract the first 5 of them, separated by commas. "
             "If there are more than 5 part numbers, output only the first five, then write 'etc' after them. "
-            "If you extract more than one unique part number, this is a clear sign that the last field should be 'many'. "
-            "If the numbers field contains more than one number (for example, if it contains a comma, a space between numbers, or the word 'and'), you MUST set the last field to 'many', even if you are not sure. "
-            "Carefully read the text and, if there are any indirect signs that the seller is offering more than one physical item (e.g. words like 'set', 'kit', 'several', '2 pcs', 'for different models', 'multiple', 'набор', 'комплект', 'несколько', '2 шт', etc.), set the last field to 'many'. "
+            "IMPORTANT - If you extract more than one unique part number, this is a clear sign that the last field should be 'many'. "
+            "If the numbers field contains more than one number, you MUST set the last field to 'many', even if you are not sure. "
+            "Carefully read the text and, if there are any indirect signs that the seller is offering more than one physical item (e.g. words like 'set', 'kit', 'several', '2 pcs', 'for different models', 'multiple', etc.), set the last field to 'many'. "
             "If you are not sure, set it to 'one'. "
             "If you cannot find a brand or number, write 'None'. "
             "Output strictly in this format: brand | numbers | one_or_many. "
