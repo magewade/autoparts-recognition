@@ -146,16 +146,24 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
                 predicted_images[i] = images_list[0]
                 confidences[i] = ""
             llm_pred = ""
-            # --- Передаем модель авто из description_model_guess, если есть ---
-            car_brand = args.car_brand
+
+            # --- Парсим description_model_guess на brand, numbers, one_many ---
+            desc_brand, desc_numbers, desc_one_many = None, None, None
             if has_model_guess:
                 guess = str(row.get("description_model_guess", "")).strip()
                 if guess and guess.upper() != "NONE":
-                    car_brand = guess
+                    parts = [p.strip() for p in guess.split("|")]
+                    if len(parts) == 3:
+                        desc_brand, desc_numbers, desc_one_many = parts
+            # Если нет guess, используем car_brand из аргументов
+            if not desc_brand:
+                desc_brand = args.car_brand
             llm_row = GeminiInference(
                 api_keys=args.api_keys,
                 model_name=args.gemini_api_model,
-                car_brand=car_brand,
+                car_brand=desc_brand,
+                desc_numbers=desc_numbers,
+                desc_one_many=desc_one_many,
                 prompt_override=args.prompt_override,
             )
             for attempt in range(2):

@@ -1,5 +1,3 @@
-# ! pip install -q google-generativeai
-
 import google.generativeai as genai
 from pathlib import Path
 import random
@@ -18,25 +16,27 @@ logging.basicConfig(
 )
 
 DEFAULT_PROMPT = """
-You are an expert in extracting automotive part/model numbers from images. If the car model is provided (variable: {car_brand}), use it to help identify the most likely part/model number visible in the image. If the car model is not provided (None or empty), first try to infer the car model from the image, then extract the most likely part/model number.
+You are an expert at extracting automotive part/model numbers from images. You are given the following information from a previous analysis of the product description:
 
-Instructions:
-1. Carefully examine all visible text, numbers, barcodes, and labels in the image.
-2. If {car_brand} is given, use it to filter and validate possible part/model numbers. Prefer numbers that are known to be used for this model or that match typical formats for this brand/model.
-3. If {car_brand} is not given, try to infer the car model from any visible logos, text, or context, and use this guess in your answer.
-4. Select the most likely part/model number according to these rules:
-    - Prefer numbers close to the brand/model name, in bold or large font, or matching known patterns.
-    - If multiple candidates exist, choose the most prominent or structured one.
-    - If no plausible number is found, use None.
-5. Be careful with character confusion: '1' vs 'I', '0' vs 'O', etc.
+[Description LLM output]
+Brand: {car_brand}
+Numbers: {desc_numbers}
+One_or_many: {desc_one_many}
+
+Your task:
+1. Use all information above to help you analyze the image. If any field is missing or 'None', try to fill it using the image.
+2. If a brand is given, use it to help identify relevant numbers or text in the image. If not, try to infer the brand/model from the image.
+3. If part/model numbers are given, check if they appear in the image. If not, try to find a new plausible OEM-like number (9-15 characters, mix of letters and digits, not a date or batch code). If you find a better or additional number, update the field accordingly.
+4. If the description said 'many', check if the image also shows multiple different part/model numbers or items. If so, set the last field to True. If only one, set to False.
+5. Always double-check for character confusion: '1' vs 'I', '0' vs 'O', etc.
 6. Ignore numbers that are clearly dates, serials, or batch codes unless no other candidates exist.
 
-Always answer strictly in this format (always in English, always 3 fields, always separated by |):
-<START> [Brand/Model Guess] | [Model/Part Number] | [Multiple? True/False] <END>
+Output strictly in this format (always in English, always 3 fields, always separated by |):
+<START> [Brand/Model Guess] | [Model/Part Number(s)] | [one/many] <END>
 
-- [Brand/Model Guess]: The car brand/model you used (either provided or inferred), or None.
-- [Model/Part Number]: The most likely part/model number found, or None.
-- [Multiple? True/False]: True if you see more than one plausible part/model number in the image, otherwise False.
+- [Brand/Model Guess]: The car brand/model you used (from description or inferred from image), or None.
+- [Model/Part Number(s)]: The most likely part/model number(s) found (from description or image), or None.
+- [one/many]: Write 'many' if you see more than one plausible part/model number or item in the image, or if the numbers field contains more than one number (comma, space, or 'and'). Also set 'many' if there are indirect signs of multiple items (e.g. 'set', 'kit', 'several', '2 pcs', 'for different models', 'multiple', 'набор', 'комплект', 'несколько', '2 шт', etc.). If you are not sure, write 'one'.
 
 If you don't know a value, write None. Do not output anything else except the required 3 fields in the specified format. Always answer in English.
 """
@@ -48,28 +48,29 @@ class GeminiInference:
         api_keys,
         model_name="gemini-2.5-flash",
         car_brand=None,
+        desc_numbers=None,
+        desc_one_many=None,
         prompt_override=None,
     ):
+        logging.info(f"[GeminiInference] Using model: {model_name}")
+
         self.api_keys = api_keys
         self.current_key_index = 0
-        self.car_brand = car_brand.lower() if car_brand else "None"
         self.prompts = self.load_prompts()
-
-        # Используем override, если он задан, иначе берем из prompts.json или дефолт
-        # base_prompt = self.prompts.get(self.car_brand, {}).get(
-        #     "main_prompt"
-        # ) or self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
-        # base_prompt = base_prompt.replace("{car_brand}", self.car_brand)
-        # if prompt_override:
-        #     self.system_prompt = prompt_override.strip() + "\n\n" + base_prompt
-        # else:
-        #     self.system_prompt = base_prompt
+        # Подставляем значения в промпт
         base_prompt = self.prompts.get("all", {}).get("main_prompt", DEFAULT_PROMPT)
-        base_prompt = base_prompt.replace("{car_brand}", self.car_brand)
+        logging.info(
+            f"[GeminiInference] Description info for prompt: brand='{car_brand}', numbers='{desc_numbers}', one_many='{desc_one_many}'"
+        )
+        prompt_filled = base_prompt.format(
+            car_brand=car_brand if car_brand is not None else "None",
+            desc_numbers=desc_numbers if desc_numbers is not None else "None",
+            desc_one_many=desc_one_many if desc_one_many is not None else "None",
+        )
         if prompt_override:
-            self.system_prompt = prompt_override.strip() + "\n\n" + base_prompt
+            self.system_prompt = prompt_override.strip() + "\n\n" + prompt_filled
         else:
-            self.system_prompt = base_prompt
+            self.system_prompt = prompt_filled
 
         self.configure_api()
         generation_config = {
@@ -175,7 +176,7 @@ class GeminiInference:
                     []
                     if not retry
                     else [
-                        "It is not correct. Try again. Look for the numbers that are highly VAG number"
+                        "It is not correct. Try again. Look for the numbers that are highly OEM number"
                     ]
                 )
 
@@ -289,38 +290,6 @@ class GeminiInference:
 
         self.message_history = []
 
-        allowed_brands = [
-            "audi",
-            "toyota",
-            "nissan",
-            "suzuki",
-            "honda",
-            "daihatsu",
-            "subaru",
-            "mazda",
-            "bmw",
-            "lexus",
-            "volkswagen",
-            "vw",
-            "volvo",
-            "mini",
-            "fiat",
-            "citroen",
-            "renault",
-            "ford",
-            "isuzu",
-            "opel",
-            "mitsubishi",
-            "mercedes",
-            "jaguar",
-            "peugeot",
-            "porsche",
-            "alfa_romeo",
-            "chevrolet",
-            "denso",
-            "hitachi",
-        ]
-
         max_attempts = 2
         for attempt in range(max_attempts):
             # Для retry добавляем жёсткое сообщение к system_prompt
@@ -344,22 +313,6 @@ class GeminiInference:
             extracted_number = self.extract_number(answer)
 
             logging.info(f"Attempt {attempt + 1}: Extracted number: {extracted_number}")
-
-            # --- BRAND CHECK ---
-            # Оставляем только разрешённые бренды, иначе unknown
-            try:
-                # Извлекаем бренд (первое поле до первого |)
-                brand_guess = extracted_number.split("|")[0].strip().lower()
-                # Если не в списке, заменяем на 'unknown'
-                if brand_guess not in allowed_brands and brand_guess not in [
-                    "none",
-                    "",
-                ]:
-                    parts = extracted_number.split("|")
-                    parts[0] = "unknown"
-                    extracted_number = " | ".join([p.strip() for p in parts])
-            except Exception as e:
-                logging.warning(f"Brand post-check failed: {e}")
 
             # Если результат не "None | None | False", считаем его валидным и возвращаем сразу
             if extracted_number.strip().lower() != "none | none | false":
