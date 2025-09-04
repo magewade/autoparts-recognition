@@ -54,6 +54,10 @@ class GeminiInference:
     ):
         logging.info(f"[GeminiInference] Using model: {model_name}")
 
+        self.car_brand = car_brand
+        self.desc_numbers = desc_numbers
+        self.desc_one_many = desc_one_many
+
         self.api_keys = api_keys
         self.current_key_index = 0
         self.prompts = self.load_prompts()
