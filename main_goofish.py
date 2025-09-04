@@ -1,5 +1,4 @@
 from gemini_description_model import GeminiDescriptionInference
-from gemini_one_many_on_photo import GeminiPhotoOneManyInference
 import os
 import ast
 import time
@@ -311,49 +310,6 @@ def main():
     return runtime_logs, times
 
 
-def enrich_with_llm(
-    input_csv="parsed_products.csv",
-    output_csv="parsed_products_with_llm.csv",
-    desc_api_keys=None,
-    desc_model="gemini-2.5-flash-lite",
-    photo_api_keys=None,
-    photo_model="gemini-2.5-flash-lite",
-):
-    """
-    Для каждой строки вызывает GeminiDescriptionInference по description (модель, номер, one/many)
-    и GeminiPhotoOneManyInference по первой картинке (one/many), сохраняет результат в новые столбцы.
-    """
-
-    df = pd.read_csv(input_csv)
-    photo_llm = GeminiPhotoOneManyInference(
-        api_keys=photo_api_keys, model_name=photo_model
-    )
-    photo_one_manys = []
-    for i, row in df.iterrows():
-        images = row.get("images", "[]")
-        photo_one_many = "one"
-        try:
-            first_image_url = get_first_image(images)
-            if first_image_url:
-                photo_one_many = photo_llm(first_image_url)
-        except Exception as e:
-            logging.warning(f"Photo LLM error on row {i}: {e}")
-        photo_one_manys.append(photo_one_many)
-        if (i + 1) % 10 == 0:
-            df_temp = df.copy()
-            df_temp["photo_one_many"] = photo_one_manys + [""] * (
-                len(df) - len(photo_one_manys)
-            )
-            df_temp.to_csv(output_csv, index=False)
-            logging.info(
-                f"[LLM enrich] Промежуточные результаты по фото сохранены в {output_csv}"
-            )
-        time.sleep(1.5)
-    df["photo_one_many"] = photo_one_manys
-    df.to_csv(output_csv, index=False)
-    logging.info(f"[LLM enrich] Финальные результаты по фото сохранены в {output_csv}")
-
-
 def run_full_pipeline(cli_args):
     parsed_csv = "parsed_products.csv"
     parsed_with_model_csv = "parsed_products_with_model.csv"
@@ -377,15 +333,6 @@ def run_full_pipeline(cli_args):
         df_parsed = pd.read_csv(parsed_with_model_csv)
         n_parsed = len(df_parsed)
 
-        # --- enrich_with_llm: обогащение по описанию и первой картинке ---
-        enrich_with_llm(
-            input_csv=parsed_with_model_csv,
-            output_csv="parsed_products_with_llm.csv",
-            desc_api_keys=api_keys_desc,
-            desc_model=desc_model,
-            photo_api_keys=api_keys,
-            photo_model=cli_args.gemini_api_model,
-        )
         if os.path.exists(output_csv):
             df_final = pd.read_csv(output_csv)
             n_final = len(df_final)
