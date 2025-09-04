@@ -33,6 +33,7 @@ Your task:
 7. If there are several numbers, always prefer the one that is closest to the brand name/logo and barcode, and that matches the typical OEM/model number format. 
 8. Ignore any numbers that are not plausible serial/OEM/model part numbers.
 9. If the brand is Bosch, in addition to extracting the Bosch part number, try to infer or guess for which car brand this part might be intended, based on any visible information (text, numbers, context) in the image. If you can guess the car brand, mention it in parentheses immediately after the brand in the first field (e.g. Bosch (for Geely) | 0 280 155 968 | one). Do not specify the exact model, engine, or modification — only the general car brand.
+10. For some brands (for example, Nissan), the OEM/model number may be written in two lines with different font sizes, often to the left of the word 'Nissan'. In such cases, combine both lines to form the full part number. If there is only one physical part, there should be only one part number in your answer.
 
 8. If there is only one physical object (part) in the image, output its main serial/OEM part number in the second field, and set the last field to 'one'.
 9. If there are clearly multiple separate physical objects (for example, several identical or different parts, or a set/kit of parts), output the main serial/OEM part number for each object (comma-separated), and set the last field to 'many'.
