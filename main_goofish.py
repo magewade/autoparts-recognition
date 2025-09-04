@@ -1,31 +1,3 @@
-import multiprocessing
-
-
-def run_with_timeout(func, args=(), kwargs=None, timeout=5):
-    """Run func(*args, **kwargs) with timeout (seconds). Returns result or None if timeout."""
-    if kwargs is None:
-        kwargs = {}
-    manager = multiprocessing.Manager()
-    return_dict = manager.dict()
-
-    def target(return_dict):
-        try:
-            return_dict["result"] = func(*args, **kwargs)
-        except Exception as e:
-            return_dict["error"] = str(e)
-
-    p = multiprocessing.Process(target=target, args=(return_dict,))
-    p.start()
-    p.join(timeout)
-    if p.is_alive():
-        p.terminate()
-        p.join()
-        return None
-    if "error" in return_dict:
-        raise Exception(return_dict["error"])
-    return return_dict.get("result", None)
-
-
 from gemini_description_model import GeminiDescriptionInference
 import os
 import ast
@@ -174,7 +146,6 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
                 predicted_images[i] = images_list[0]
                 confidences[i] = ""
             llm_pred = ""
-
             # --- Парсим description_model_guess на brand, numbers, one_many ---
             desc_brand, desc_numbers, desc_one_many = None, None, None
             if has_model_guess:
@@ -196,11 +167,9 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
             )
             for attempt in range(2):
                 try:
-                    llm_pred = run_with_timeout(
-                        llm_row, args=(predicted_images[i],), timeout=10
-                    )
+                    llm_pred = llm_row(predicted_images[i])
                     if not llm_pred:
-                        raise ValueError(f"Empty LLM response or timeout: {llm_pred}")
+                        raise ValueError(f"Empty LLM response: {llm_pred}")
                     break  # успех
                 except Exception as e:
                     logging.warning(f"LLM error (attempt {attempt+1}): {e}")
