@@ -26,13 +26,20 @@ One_or_many: {desc_one_many}
 Your task:
 1. Use all information above to help you analyze the image. If any field is missing or 'None', try to fill it using the image.
 2. If a brand is given, use it to help identify relevant numbers or text in the image. If not, try to infer the brand/model from the image.
-3. Your main goal is to extract the main serial (OEM) part number for each physical object visible in the image. This number is unique for each part, usually 9-15 characters, contains both letters and digits, and is not a date, batch, or random short code. Ignore any numbers that are not plausible serial/OEM part numbers.
-4. If there is only one physical object (part) in the image, output its main serial/OEM part number in the second field, and set the last field to 'one'.
-5. If there are clearly multiple separate physical objects (for example, several identical or different parts, or a set/kit of parts), output the main serial/OEM part number for each object (comma-separated), and set the last field to 'many'.
-6. Do NOT set 'many' just because you see several numbers on one part. Only set 'many' if there are multiple distinct physical objects/parts visible.
-7. If you are not sure, default to 'one'.
-8. Always double-check for character confusion: '1' vs 'I', '0' vs 'O', etc.
-9. Ignore numbers that are clearly dates, serials, or batch codes unless no other candidates exist.
+3. Your main goal is to extract the main serial (OEM) part number or model number for each physical object visible in the image. This number is unique for each part, usually 9-15 characters, contains both letters and digits, and is not a date, batch, or random short code. 
+4. Always try to select the number that most closely matches the typical format of a model or OEM part number (for example, a mix of letters and digits, often with dashes or spaces, and not just a short code or serial/batch).
+5. The OEM/serial/model number is most often located directly above or near the barcode, and usually just below the logo or brand name of the manufacturer. It is often printed in a larger or bolder font. 
+6. Do NOT select numbers that are printed far from the brand or barcode, or that look like internal codes, batch numbers, or serials. Do NOT select numbers that are at the very bottom of the label or packaging unless they clearly match the OEM/model format and are near the brand/barcode. 
+7. If there are several numbers, always prefer the one that is closest to the brand name/logo and barcode, and that matches the typical OEM/model number format. 
+8. Ignore any numbers that are not plausible serial/OEM/model part numbers.
+9. If the brand is Bosch, in addition to extracting the Bosch part number, try to infer or guess for which car model(s) this part might be intended, based on any visible information (text, numbers, context) in the image. If you can guess the car model, mention it in parentheses after the part number (e.g. 0 280 155 968 (for BMW 3 Series)).
+
+8. If there is only one physical object (part) in the image, output its main serial/OEM part number in the second field, and set the last field to 'one'.
+9. If there are clearly multiple separate physical objects (for example, several identical or different parts, or a set/kit of parts), output the main serial/OEM part number for each object (comma-separated), and set the last field to 'many'.
+10. Do NOT set 'many' just because you see several numbers on one part. Only set 'many' if there are multiple distinct physical objects/parts visible.
+11. If you are not sure, default to 'one'.
+12. Always double-check for character confusion: '1' vs 'I', '0' vs 'O', etc.
+13. Ignore numbers that are clearly dates, serials, or batch codes unless no other candidates exist.
 
 Output strictly in this format (always in English, always 3 fields, always separated by |):
 <START> [Brand/Model Guess] | [Model/Part Number(s)] | [one/many] <END>
