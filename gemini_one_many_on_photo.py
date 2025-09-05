@@ -6,47 +6,42 @@ import random
 import io
 from pathlib import Path
 
-PHOTO_ONE_MANY_PROMPT = (
+
+# Новый промпт для одновременного определения one/many и наличия наклейки с баркодом и брендом
+PHOTO_ONE_MANY_BARCODE_PROMPT = (
     "If there is more than one unique physical car part visible, output 'many'. "
     "If there is only one unique physical car part, output 'one'. "
-    "Output only 'one' or 'many'. Do not explain your answer. "
-    "If you don't know the answer, output 'unknown'."
+    "If there is a visible sticker or label with both a barcode and a brand name, output 'True', otherwise output 'False'. "
+    "Output strictly in the format: one|True, one|False, many|True, or many|False. Do not explain your answer. If you don't know, output 'unknown|unknown'."
 )
 
 
-def process_images_one_many_and_barcodes(
-    image_paths, api_keys, model_name="gemini-2.0-flash-lite", barcode_brand_model=None
+# --- Основная функция для пакетной обработки списка картинок ---
+def process_images_one_many_and_barcode_label(
+    image_paths, api_keys, model_name="gemini-2.0-flash-lite"
 ):
     """
     Для списка image_paths:
-    - Прогоняет каждую через GeminiPhotoOneManyInference (one/many).
-    - Если хотя бы на одной фото many — возвращает ('many', ...)
-    - Для каждой фото вызывает barcode_brand_model (если передан), чтобы найти штрихкод с брендом (и не задняя часть).
-    - Возвращает ('one'/'many', [список фото с нужным штрихкодом и брендом])
+    - Для каждой картинки вызывает LLM с новым промптом.
+    - Если хотя бы на одной many — прерывает обработку и возвращает накопленный список (до many включительно).
+    - Возвращает список строк вида one|True, many|False и т.д.
     """
-    one_many_model = GeminiPhotoOneManyInference(api_keys, model_name=model_name)
-    barcode_images = []
-    first_barcode_image = None
+    model = GeminiPhotoOneManyBarcodeInference(api_keys, model_name=model_name)
+    predictions = []
     for img_path in image_paths:
-        # 1. Проверка one/many
-        result = one_many_model(img_path)
-        if result == "many":
-            return "many", barcode_images, first_barcode_image
-        # 2. Проверка на штрихкод+бренд (если есть модель)
-        if barcode_brand_model is not None:
-            try:
-                has_barcode_brand = barcode_brand_model(img_path)
-                if has_barcode_brand:
-                    barcode_images.append(img_path)
-                    if first_barcode_image is None:
-                        first_barcode_image = img_path
-            except Exception as e:
-                logging.warning(f"[Barcode check] Error for {img_path}: {e}")
-    return "one", barcode_images, first_barcode_image
+        try:
+            pred = model(img_path)
+        except Exception as e:
+            logging.warning(f"[Image one/many+barcode] Error for {img_path}: {e}")
+            pred = "unknown|unknown"
+        predictions.append(pred)
+        if pred.lower().startswith("many"):
+            break
+    return predictions
 
 
-class GeminiPhotoOneManyInference:
-
+# --- Класс-инференс для работы с промптом one|many + barcode ---
+class GeminiPhotoOneManyBarcodeInference:
     def __init__(self, api_keys, model_name="gemini-2.0-flash-lite"):
         self.api_keys = api_keys
         self.current_key_index = 0
@@ -58,7 +53,7 @@ class GeminiPhotoOneManyInference:
                 "temperature": 0,
                 "top_p": 1,
                 "top_k": 1,
-                "max_output_tokens": 1000,  # увеличено, чтобы модель успевала вернуть ответ
+                "max_output_tokens": 5000,
             },
             safety_settings=[
                 {
@@ -78,7 +73,7 @@ class GeminiPhotoOneManyInference:
                     "threshold": "BLOCK_ONLY_HIGH",
                 },
             ],
-            system_instruction=PHOTO_ONE_MANY_PROMPT,
+            system_instruction=PHOTO_ONE_MANY_BARCODE_PROMPT,
         )
 
     def configure_api(self):
@@ -105,13 +100,10 @@ class GeminiPhotoOneManyInference:
                     }
                 }
 
-                time.sleep(
-                    random.uniform(1, 2)
-                )  # маленькая задержка, чтобы не забанили
+                time.sleep(random.uniform(1, 2))
                 response = self.model.generate_content([image_part])
                 logging.info(f"[Photo LLM] Full response: {response}")
 
-                # безопасно получаем текст из parts
                 answer_text = None
                 if response.candidates:
                     cand = response.candidates[0]
@@ -122,7 +114,7 @@ class GeminiPhotoOneManyInference:
                     logging.warning("[Photo LLM] Empty answer from model")
                     return None
 
-                return answer_text.strip().lower()
+                return answer_text.strip()
 
             except Exception as e:
                 if "quota" in str(e).lower():
@@ -160,12 +152,13 @@ class GeminiPhotoOneManyInference:
             if not answer:
                 logging.info("[Photo LLM] Empty answer, retrying...")
                 continue
-            logging.info(f"[LLM photo one/many] Ответ: {answer}")
-            if answer in ("one", "many"):
+            logging.info(f"[LLM photo one/many+barcode] Ответ: {answer}")
+            # Проверяем формат
+            if any(answer.lower().startswith(x) for x in ("one|", "many|", "unknown|")):
                 return answer
             logging.info(f"[Photo LLM] Invalid answer '{answer}', retrying...")
 
         logging.warning(
             "[Photo LLM] All attempts failed or only invalid answers found."
         )
-        return "one"  # fallback
+        return "unknown|unknown"  # fallback

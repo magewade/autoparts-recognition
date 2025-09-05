@@ -20,18 +20,6 @@ logging.basicConfig(
 )
 
 
-# --- Вспомогательная функция для извлечения первого URL из строки-списка images
-def get_first_image(images_str):
-    try:
-        images_list = (
-            ast.literal_eval(images_str) if isinstance(images_str, str) else images_str
-        )
-        if isinstance(images_list, list) and images_list:
-            return images_list[0]
-    except Exception:
-        pass
-    return None
-
 
 def extract_model_from_description(
     input_csv="parsed_products.csv",
@@ -355,14 +343,12 @@ def run_full_pipeline(cli_args):
             f"Сохранено: products_many.csv (many: {len(df_many)}), products_one.csv (one: {len(df_one)})"
         )
 
-        # --- Новый шаг: анализ всех изображений для one (image_one_many, barcode_brand_images, first_barcode_brand_image) ---
-        from gemini_one_many_on_photo import process_images_one_many_and_barcodes
+        # --- Новый шаг: анализ всех изображений для one (image_predictions) ---
+        from gemini_one_many_on_photo import process_images_one_many_and_barcode_label
         import ast
 
         df_one = df_one.copy()
-        image_one_many = []
-        barcode_brand_images = []
-        first_barcode_brand_image = []
+        image_predictions = []
         for idx, row in df_one.iterrows():
             images = row.get("images", "[]")
             try:
@@ -372,28 +358,21 @@ def run_full_pipeline(cli_args):
             except Exception:
                 images_list = []
             if not images_list:
-                image_one_many.append("unknown")
-                barcode_brand_images.append([])
-                first_barcode_brand_image.append("")
+                image_predictions.append([])
                 continue
             try:
-                one_many, barcode_imgs, first_barcode = (
-                    process_images_one_many_and_barcodes(
-                        images_list,
-                        api_keys=cli_args.api_keys,
-                        model_name=cli_args.gemini_api_model,
-                        barcode_brand_model=None,  # можно заменить на свою модель, если есть
-                    )
+                preds = process_images_one_many_and_barcode_label(
+                    images_list,
+                    api_keys=cli_args.api_keys,
+                    model_name=cli_args.gemini_api_model,
                 )
             except Exception as e:
-                logging.warning(f"[Image one/many step] Error for row {idx}: {e}")
-                one_many, barcode_imgs, first_barcode = "unknown", [], ""
-            image_one_many.append(one_many)
-            barcode_brand_images.append(barcode_imgs)
-            first_barcode_brand_image.append(first_barcode if first_barcode else "")
-        df_one["image_one_many"] = image_one_many
-        df_one["barcode_brand_images"] = barcode_brand_images
-        df_one["first_barcode_brand_image"] = first_barcode_brand_image
+                logging.warning(
+                    f"[Image one/many+barcode step] Error for row {idx}: {e}"
+                )
+                preds = ["unknown|unknown"] * len(images_list)
+            image_predictions.append(preds)
+        df_one["image_predictions"] = image_predictions
         df_one.to_csv("products_one_with_image_analysis.csv", index=False)
 
         # --- Дальнейший пайплайн только для one (теперь используем products_one_with_image_analysis.csv) ---
