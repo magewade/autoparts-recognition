@@ -363,18 +363,7 @@ def run_full_pipeline(cli_args):
     mask_many = df_parsed["description_model_guess"].apply(get_one_many) == "many"
     df_many = df_parsed[mask_many].copy()
     df_one = df_parsed[~mask_many].copy()
-    import hashlib
-
-    def df_hash(df):
-        return (
-            hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
-            if not df.empty
-            else "EMPTY"
-        )
-
-    logging.info(
-        f"[SPLIT desc] Добавлено в many: {len(df_many)}, hash: {df_hash(df_many)}; в one: {len(df_one)}, hash: {df_hash(df_one)}"
-    )
+    logging.info(f"[SPLIT desc] Добавлено в many: {len(df_many)}; в one: {len(df_one)}")
     df_many.to_csv("products_many.csv", index=False)
     df_one.to_csv("products_one.csv", index=False)
 
@@ -390,28 +379,27 @@ def run_full_pipeline(cli_args):
                 ast.literal_eval(images) if isinstance(images, str) else images
             )
         except Exception:
+            preds = []
+            usage = []
             usage_rows = []
             total_prompt = 0
             total_candidates = 0
             total_tokens = 0
-            for idx, usage_list in enumerate(image_usage_stats):
-                for img_idx, usage in enumerate(usage_list):
-                    row = {"row": idx, "image_idx": img_idx}
-                    row.update(usage)
-                    usage_rows.append(row)
-                    # Суммируем usage
+            for idx2, usage_list in enumerate(image_usage_stats):
+                for img_idx, usage_item in enumerate(usage_list):
+                    row2 = {"row": idx2, "image_idx": img_idx}
+                    row2.update(usage_item)
+                    usage_rows.append(row2)
                     try:
-                        total_prompt += int(usage.get("prompt_token_count") or 0)
+                        total_prompt += int(usage_item.get("prompt_token_count") or 0)
                         total_candidates += int(
-                            usage.get("candidates_token_count") or 0
+                            usage_item.get("candidates_token_count") or 0
                         )
-                        total_tokens += int(usage.get("total_token_count") or 0)
+                        total_tokens += int(usage_item.get("total_token_count") or 0)
                     except Exception:
                         pass
             usage_df = pd.DataFrame(usage_rows)
             usage_df.to_csv("products_image_usage.csv", index=False)
-
-            # Логируем итоговые usage суммы (только один раз в конце)
             logging.info(
                 f"[TOKENS image] prompt: {total_prompt}, candidates: {total_candidates}, total: {total_tokens}"
             )
@@ -429,7 +417,7 @@ def run_full_pipeline(cli_args):
     usage_df.to_csv("products_image_usage.csv", index=False)
     # Логирование split после image analysis
     logging.info(
-        f"[SPLIT image] Добавлено в many: {len(df_many_img)}, hash: {df_hash(df_many_img)}; в one: {len(df_one_img)}, hash: {df_hash(df_one_img)}"
+        f"[SPLIT image] Добавлено в many: {len(df_many_img)}; в one: {len(df_one_img)}"
     )
 
     # 6. Отсев many/one по картинкам, many добавляем к products_many.csv
@@ -515,7 +503,7 @@ def run_full_pipeline(cli_args):
         df_many_total.to_csv(df_many_path, index=False)
     # Логирование split после финального отсела
     logging.info(
-        f"[SPLIT final] Добавлено в many: {len(df_many_final)}, hash: {df_hash(df_many_final)}; в one: {len(df_one_final)}, hash: {df_hash(df_one_final)}"
+        f"[SPLIT final] Добавлено в many: {len(df_many_final)}; в one: {len(df_one_final)}"
     )
     df_one_final.to_csv("products_one.csv", index=False)
     # products_many.csv уже обновлен выше
