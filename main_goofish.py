@@ -8,7 +8,6 @@ import pandas as pd
 
 from config import Config
 from gemini_model import GeminiInference
-from picker_model import TargetModel
 from dataprocessor_goofish import (
     Processor,
     GoofishParserPlaywrightAsync,
@@ -42,27 +41,56 @@ def extract_model_from_description(
     llm = GeminiDescriptionInference(api_keys=api_keys, model_name=model_name)
     logging.info(f"[LLM desc] Используемая модель: {model_name}")
     guesses = []
+    usage_stats = []
     for i, row in df.iterrows():
         desc = str(row.get("description", ""))
         if not desc.strip():
             guesses.append("")
+            usage_stats.append(
+                {
+                    "prompt_token_count": None,
+                    "candidates_token_count": None,
+                    "total_token_count": None,
+                }
+            )
             continue
         try:
-            guess = llm(desc)
+            guess, usage = llm(desc, return_usage=True)
         except Exception as e:
             logging.warning(f"Gemini LLM error on row {i}: {e}")
             guess = "ERROR"
+            usage = {
+                "prompt_token_count": None,
+                "candidates_token_count": None,
+                "total_token_count": None,
+            }
         guesses.append(guess)
+        usage_stats.append(usage)
         if (i + 1) % 10 == 0:
             df_temp = df.copy()
             df_temp["description_model_guess"] = guesses + [""] * (
                 len(df) - len(guesses)
             )
             df_temp.to_csv(output_csv, index=False)
+            # Сохраняем usage
+            usage_df = pd.DataFrame(
+                usage_stats
+                + [
+                    {
+                        "prompt_token_count": None,
+                        "candidates_token_count": None,
+                        "total_token_count": None,
+                    }
+                ]
+                * (len(df) - len(usage_stats))
+            )
+            usage_df.to_csv("products_description_usage.csv", index=False)
             logging.info(f"[LLM desc] Промежуточные результаты записаны в {output_csv}")
         time.sleep(1.5)
     df["description_model_guess"] = guesses
     df.to_csv(output_csv, index=False)
+    usage_df = pd.DataFrame(usage_stats)
+    usage_df.to_csv("products_description_usage.csv", index=False)
     logging.info(f"[LLM desc] Финальные результаты сохранены в {output_csv}")
     return output_csv
 
@@ -90,7 +118,6 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
     )
     args, _ = parser.parse_known_args()
 
-    picker = TargetModel()
     df = pd.read_csv(parsed_csv)
     result_path = args.save_file_name + ".csv"
     # Если есть столбец description_model_guess, будем использовать его для car_brand
@@ -123,15 +150,8 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
                 llm_predictions[i] = ""
                 confidences[i] = ""
                 continue
-            try:
-                pred_img, conf = picker.do_inference(images_list)
-                predicted_images[i] = pred_img
-                confidences[i] = conf
-                logging.info(f"Predicted image: {pred_img} | Confidence: {conf:.4f}")
-            except Exception as e:
-                logging.warning(f"Picker error: {e}")
-                predicted_images[i] = images_list[0]
-                confidences[i] = ""
+            predicted_images[i] = images_list[0] if images_list else ""
+            confidences[i] = ""
             llm_pred = ""
             # --- Парсим description_model_guess на brand, numbers, one_many ---
             desc_brand, desc_numbers, desc_one_many = None, None, None
@@ -305,6 +325,51 @@ def main():
 
 
 def run_full_pipeline(cli_args):
+    # --- Извлечение номера с первой картинки с one|True (штрихкод) ---
+    from gemini_model import GeminiInference
+
+    df_one_img = pd.read_csv("products_one_by_image.csv")
+    extracted_numbers = []
+    barcode_image_links = []
+    # Для каждого товара ищем первую ссылку с one|True
+    for idx, row in df_one_img.iterrows():
+        images = row.get("images", "[]")
+        try:
+            images_list = (
+                ast.literal_eval(images) if isinstance(images, str) else images
+            )
+        except Exception:
+            images_list = []
+        preds = row.get("image_predictions", [])
+        if isinstance(preds, str):
+            try:
+                preds = ast.literal_eval(preds)
+            except Exception:
+                preds = []
+        # Найти первую ссылку с one|True
+        found_link = None
+        for img_url, pred in zip(images_list, preds):
+            if str(pred).strip().lower() == "one|true":
+                found_link = img_url
+                break
+        barcode_image_links.append(found_link if found_link else "")
+        if found_link:
+            try:
+                gemini = GeminiInference(
+                    api_keys=cli_args.api_keys,
+                    model_name=cli_args.gemini_api_model,
+                    car_brand=row.get("description_model_guess", None),
+                )
+                number = gemini(found_link)
+            except Exception as e:
+                logging.warning(f"[GeminiInference] Ошибка для {found_link}: {e}")
+                number = "ERROR"
+        else:
+            number = ""
+        extracted_numbers.append(number)
+    df_one_img["barcode_image_link"] = barcode_image_links
+    df_one_img["extracted_number_from_barcode_image"] = extracted_numbers
+    df_one_img.to_csv("products_one_by_image_with_number.csv", index=False)
     parsed_csv = "parsed_products.csv"
     parsed_with_model_csv = "parsed_products_with_model.csv"
     output_csv = "final_products.csv"
@@ -342,12 +407,13 @@ def run_full_pipeline(cli_args):
             f"Сохранено: products_many.csv (many: {len(df_many)}), products_one.csv (one: {len(df_one)})"
         )
 
-        # --- Новый шаг: анализ всех изображений для one (image_predictions) ---
+        # --- Анализ всех изображений для one (image_predictions) ---
         from gemini_one_many_on_photo import process_images_one_many_and_barcode_label
         import ast
 
         df_one = df_one.copy()
         image_predictions = []
+        image_usage_stats = []
         for idx, row in df_one.iterrows():
             images = row.get("images", "[]")
             try:
@@ -358,9 +424,10 @@ def run_full_pipeline(cli_args):
                 images_list = []
             if not images_list:
                 image_predictions.append([])
+                image_usage_stats.append([])
                 continue
             try:
-                preds = process_images_one_many_and_barcode_label(
+                preds, usage = process_images_one_many_and_barcode_label(
                     images_list,
                     api_keys=cli_args.api_keys,
                     model_name=cli_args.gemini_api_model,
@@ -370,9 +437,26 @@ def run_full_pipeline(cli_args):
                     f"[Image one/many+barcode step] Error for row {idx}: {e}"
                 )
                 preds = ["unknown|unknown"] * len(images_list)
+                usage = [
+                    {
+                        "prompt_token_count": None,
+                        "candidates_token_count": None,
+                        "total_token_count": None,
+                    }
+                ] * len(images_list)
             image_predictions.append(preds)
+            image_usage_stats.append(usage)
         df_one["image_predictions"] = image_predictions
         df_one.to_csv("products_one_with_image_analysis.csv", index=False)
+
+        usage_rows = []
+        for idx, usage_list in enumerate(image_usage_stats):
+            for img_idx, usage in enumerate(usage_list):
+                row = {"row": idx, "image_idx": img_idx}
+                row.update(usage)
+                usage_rows.append(row)
+        usage_df = pd.DataFrame(usage_rows)
+        usage_df.to_csv("products_image_usage.csv", index=False)
 
         # --- Отсекаем many по image_predictions ---
         def has_many(preds):
@@ -386,6 +470,52 @@ def run_full_pipeline(cli_args):
 
         # --- Дальнейший пайплайн только для one (products_one_by_image.csv) ---
         one_input_csv = "products_one_by_image.csv"
+
+        # --- Извлечение номера с первой картинки с one|True (штрихкод) ---
+        from gemini_model import GeminiInference
+
+        df_one_img = pd.read_csv(one_input_csv)
+        extracted_numbers = []
+        barcode_image_links = []
+        for idx, row in df_one_img.iterrows():
+            images = row.get("images", "[]")
+            try:
+                images_list = (
+                    ast.literal_eval(images) if isinstance(images, str) else images
+                )
+            except Exception:
+                images_list = []
+            preds = row.get("image_predictions", [])
+            if isinstance(preds, str):
+                try:
+                    preds = ast.literal_eval(preds)
+                except Exception:
+                    preds = []
+            found_link = None
+            for img_url, pred in zip(images_list, preds):
+                if str(pred).strip().lower() == "one|true":
+                    found_link = img_url
+                    break
+            barcode_image_links.append(found_link if found_link else "")
+            if found_link:
+                try:
+                    gemini = GeminiInference(
+                        api_keys=cli_args.api_keys,
+                        model_name=cli_args.gemini_api_model,
+                        car_brand=row.get("description_model_guess", None),
+                    )
+                    number = gemini(found_link)
+                except Exception as e:
+                    logging.warning(f"[GeminiInference] Ошибка для {found_link}: {e}")
+                    number = "ERROR"
+            else:
+                number = ""
+            extracted_numbers.append(number)
+        df_one_img["barcode_image_link"] = barcode_image_links
+        df_one_img["extracted_number_from_barcode_image"] = extracted_numbers
+        df_one_img.to_csv("products_one_by_image_with_number.csv", index=False)
+
+        # --- Далее можно использовать products_one_by_image_with_number.csv для следующих шагов ---
         if os.path.exists(output_csv):
             df_final = pd.read_csv(output_csv)
             n_final = len(df_final)
@@ -399,11 +529,17 @@ def run_full_pipeline(cli_args):
                     f"final_products.csv найден, обработано {n_final} из {len(df_one_img)} — доинференсим оставшиеся"
                 )
                 t_inf = time.time()
-                run_inference(parsed_csv=one_input_csv, output_csv=output_csv)
+                run_inference(
+                    parsed_csv="products_one_by_image_with_number.csv",
+                    output_csv=output_csv,
+                )
                 inference_time = time.time() - t_inf
         else:
             t_inf = time.time()
-            run_inference(parsed_csv=one_input_csv, output_csv=output_csv)
+            run_inference(
+                parsed_csv="products_one_by_image_with_number.csv",
+                output_csv=output_csv,
+            )
             inference_time = time.time() - t_inf
     else:
         logging.warning("parsed_products.csv не найден, инференс невозможен")
@@ -491,3 +627,26 @@ if __name__ == "__main__":
         f"\nВсего: {total_time/60:.2f} мин"
         f"\n====================="
     )
+
+    # --- Финальный подсчет usage_metadata по всем моделям (если usage собирается в пайплайне) ---
+    import glob
+    import pandas as pd
+
+    usage_files = glob.glob("*_usage.csv")
+    total_prompt = 0
+    total_candidates = 0
+    total_tokens = 0
+    for usage_file in usage_files:
+        try:
+            df = pd.read_csv(usage_file)
+            total_prompt += df["prompt_token_count"].fillna(0).sum()
+            total_candidates += df["candidates_token_count"].fillna(0).sum()
+            total_tokens += df["total_token_count"].fillna(0).sum()
+        except Exception as e:
+            logging.warning(f"[USAGE] Не удалось прочитать {usage_file}: {e}")
+    if usage_files:
+        logging.info(f"\n==== TOTAL TOKEN USAGE ====")
+        logging.info(f"Prompt tokens: {int(total_prompt)}")
+        logging.info(f"Candidates tokens: {int(total_candidates)}")
+        logging.info(f"Total tokens: {int(total_tokens)}")
+        logging.info(f"==========================\n")

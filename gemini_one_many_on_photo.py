@@ -28,16 +28,23 @@ def process_images_one_many_and_barcode_label(
     """
     model = GeminiPhotoOneManyBarcodeInference(api_keys, model_name=model_name)
     predictions = []
+    token_stats = []
     for img_path in image_paths:
         try:
-            pred = model(img_path)
+            pred, usage = model(img_path, return_usage=True)
         except Exception as e:
             logging.warning(f"[Image one/many+barcode] Error for {img_path}: {e}")
             pred = "unknown|unknown"
+            usage = {
+                "prompt_token_count": None,
+                "candidates_token_count": None,
+                "total_token_count": None,
+            }
         predictions.append(pred)
+        token_stats.append(usage)
         if pred.lower().startswith("many"):
             break
-    return predictions
+    return predictions, token_stats
 
 
 # --- Класс-инференс для работы с промптом one|many + barcode ---
@@ -84,7 +91,7 @@ class GeminiPhotoOneManyBarcodeInference:
         self.configure_api()
         logging.info(f"[Photo LLM] Switched to API key index: {self.current_key_index}")
 
-    def get_response(self, img_data, max_retries=5):
+    def get_response(self, img_data, max_retries=5, return_usage=False):
         base_delay = 5
         for attempt in range(max_retries):
             try:
@@ -102,19 +109,37 @@ class GeminiPhotoOneManyBarcodeInference:
 
                 time.sleep(random.uniform(1, 2))
                 response = self.model.generate_content([image_part])
-                logging.info(f"[Photo LLM] Full response: {response}")
+                # logging.info(f"[Photo LLM] Full response: {response}")  # убираем подробный лог
 
                 answer_text = None
+                usage = None
                 if response.candidates:
                     cand = response.candidates[0]
                     if cand.content and cand.content.parts:
                         answer_text = cand.content.parts[0].text
+                # usage_metadata всегда на верхнем уровне ответа
+                if hasattr(response, "result") and hasattr(
+                    response.result, "usage_metadata"
+                ):
+                    usage = dict(response.result.usage_metadata)
+                elif hasattr(response, "usage_metadata"):
+                    usage = dict(response.usage_metadata)
+                else:
+                    usage = {
+                        "prompt_token_count": None,
+                        "candidates_token_count": None,
+                        "total_token_count": None,
+                    }
 
                 if not answer_text:
                     logging.warning("[Photo LLM] Empty answer from model")
-                    return None
+                    return (None, usage) if return_usage else None
 
-                return answer_text.strip()
+                return (
+                    (answer_text.strip(), usage)
+                    if return_usage
+                    else answer_text.strip()
+                )
 
             except Exception as e:
                 if "quota" in str(e).lower():
@@ -132,9 +157,20 @@ class GeminiPhotoOneManyBarcodeInference:
                     raise
 
         logging.error("[Photo LLM] Max retries reached. Unable to get a response.")
-        return None
+        return (
+            (
+                None,
+                {
+                    "prompt_token_count": None,
+                    "candidates_token_count": None,
+                    "total_token_count": None,
+                },
+            )
+            if return_usage
+            else None
+        )
 
-    def __call__(self, image_path):
+    def __call__(self, image_path, return_usage=False):
         self.configure_api()
         if image_path.startswith("http"):
             response = requests.get(image_path, stream=True)
@@ -148,17 +184,35 @@ class GeminiPhotoOneManyBarcodeInference:
 
         max_attempts = 2
         for attempt in range(max_attempts):
-            answer = self.get_response(img_data)
-            if not answer:
+            result = self.get_response(img_data, return_usage=return_usage)
+            if not result or (return_usage and not result[0]):
                 logging.info("[Photo LLM] Empty answer, retrying...")
                 continue
-            logging.info(f"[LLM photo one/many+barcode] Ответ: {answer}")
-            # Проверяем формат
-            if any(answer.lower().startswith(x) for x in ("one|", "many|", "unknown|")):
-                return answer
+            if return_usage:
+                answer, usage = result
+                logging.info(
+                    f"[LLM photo one/many+barcode] Ответ: {answer} | usage: {usage}"
+                )
+                if any(
+                    answer.lower().startswith(x) for x in ("one|", "many|", "unknown|")
+                ):
+                    return answer, usage
+            else:
+                answer = result
+                logging.info(f"[LLM photo one/many+barcode] Ответ: {answer}")
+                if any(
+                    answer.lower().startswith(x) for x in ("one|", "many|", "unknown|")
+                ):
+                    return answer
             logging.info(f"[Photo LLM] Invalid answer '{answer}', retrying...")
 
         logging.warning(
             "[Photo LLM] All attempts failed or only invalid answers found."
         )
+        if return_usage:
+            return "unknown|unknown", {
+                "prompt_token_count": None,
+                "candidates_token_count": None,
+                "total_token_count": None,
+            }
         return "unknown|unknown"  # fallback

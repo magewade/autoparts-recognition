@@ -161,7 +161,7 @@ class GeminiInference:
             safety_settings=safety_settings,
         )
 
-    def get_response(self, img_data, retry=False):
+    def get_response(self, img_data, retry=False, return_usage=False):
         max_retries = 10
         base_delay = 5
 
@@ -177,7 +177,6 @@ class GeminiInference:
                         ),
                     }
                 }
-                # Всегда первым идёт текстовый промпт, затем картинка
                 prompt_parts = [self.system_prompt, image_part]
                 if retry:
                     prompt_parts.append(
@@ -189,12 +188,27 @@ class GeminiInference:
                 chat = self.model.start_chat(history=self.message_history)
                 response = chat.send_message(prompt_parts)
 
-                logging.info(f"Main model response: {response.text}")
+                # logging.info(f"Main model response: {response.text}")
 
                 self.message_history.append({"role": "user", "parts": prompt_parts})
                 self.message_history.append({"role": "model", "parts": [response.text]})
 
-                return response.text
+                # usage_metadata может быть на response или response.result
+                usage = None
+                if hasattr(response, "result") and hasattr(
+                    response.result, "usage_metadata"
+                ):
+                    usage = dict(response.result.usage_metadata)
+                elif hasattr(response, "usage_metadata"):
+                    usage = dict(response.usage_metadata)
+                else:
+                    usage = {
+                        "prompt_token_count": None,
+                        "candidates_token_count": None,
+                        "total_token_count": None,
+                    }
+
+                return (response.text, usage) if return_usage else response.text
 
             except Exception as e:
                 if "quota" in str(e).lower():
@@ -278,7 +292,7 @@ class GeminiInference:
         self.incorrect_predictions = []
         self.message_history = []
 
-    def __call__(self, image_path):
+    def __call__(self, image_path, return_usage=False):
         self.configure_api()
 
         if image_path.startswith("http"):
@@ -294,15 +308,19 @@ class GeminiInference:
 
         max_attempts = 2
         for attempt in range(max_attempts):
-            # Для retry добавляем жёсткое сообщение к system_prompt
             if attempt == 1:
                 orig_prompt = self.system_prompt
                 self.system_prompt = (
                     "Previous answer did not match required format (must contain exactly 2 pipe | characters and 3 fields). STRICTLY follow the output format!\n\n"
                     + orig_prompt
                 )
-            answer = self.get_response(img_data, retry=(attempt > 0))
-            # Проверка формата: должно быть ровно 2 pipe (|) и <START>/<END>
+            result = self.get_response(
+                img_data, retry=(attempt > 0), return_usage=return_usage
+            )
+            if return_usage:
+                answer, usage = result
+            else:
+                answer = result
             if answer.count("|") != 2:
                 logging.info(
                     f"LLM output format invalid (pipes: {answer.count('|')}), retrying..."
@@ -316,12 +334,10 @@ class GeminiInference:
 
             logging.info(f"Attempt {attempt + 1}: Extracted number: {extracted_number}")
 
-            # Если результат не "None | None | unknown", считаем его валидным и возвращаем сразу
             if extracted_number.strip().lower() != "none | none | none":
                 self.reset_incorrect_predictions()
-                return extracted_number
+                return (extracted_number, usage) if return_usage else extracted_number
 
-            # Если ничего не найдено, пробуем дальше
             if attempt < max_attempts - 1:
                 logging.info(
                     f"No valid number found in attempt {attempt + 1}, retrying..."
@@ -329,5 +345,13 @@ class GeminiInference:
 
         logging.warning("All attempts failed or only None found.")
         self.reset_incorrect_predictions()
-        # Возвращаем всегда 3 поля, если ничего не найдено
+        if return_usage:
+            return (
+                "None | None | None",
+                {
+                    "prompt_token_count": None,
+                    "candidates_token_count": None,
+                    "total_token_count": None,
+                },
+            )
         return "None | None | None"

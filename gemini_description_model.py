@@ -73,7 +73,7 @@ class GeminiDescriptionInference:
         self.configure_api()
         logging.info(f"[Desc LLM] Switched to API key index: {self.current_key_index}")
 
-    def __call__(self, desc):
+    def __call__(self, desc, return_usage=False):
         prompt = (
             "Extract the car brand (not a specific model or modification) and all part numbers from the following description. "
             "If the model name is written in a language other than English (for example, in Chinese), always translate or adapt it to the most common English name for that car brand. "
@@ -95,8 +95,24 @@ class GeminiDescriptionInference:
             try:
                 response = self.model.generate_content(prompt)
                 guess = response.text.strip()
+                # usage_metadata может быть на response или response.result
+                usage = None
+                if hasattr(response, "result") and hasattr(
+                    response.result, "usage_metadata"
+                ):
+                    usage = dict(response.result.usage_metadata)
+                elif hasattr(response, "usage_metadata"):
+                    usage = dict(response.usage_metadata)
+                else:
+                    usage = {
+                        "prompt_token_count": None,
+                        "candidates_token_count": None,
+                        "total_token_count": None,
+                    }
                 logging.info(f"[LLM desc] Ответ: {guess}")
                 time.sleep(2.1)  # <= 30 запросов в минуту
+                if return_usage:
+                    return clean_llm_output(guess), usage
                 return clean_llm_output(guess)
             except Exception as e:
                 if "quota" in str(e).lower():
@@ -105,4 +121,10 @@ class GeminiDescriptionInference:
                 else:
                     logging.warning(f"[Desc LLM] Error: {e}")
                     time.sleep(2.1)
+        if return_usage:
+            return "ERROR", {
+                "prompt_token_count": None,
+                "candidates_token_count": None,
+                "total_token_count": None,
+            }
         return "ERROR"
