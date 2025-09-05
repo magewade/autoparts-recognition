@@ -442,6 +442,7 @@ def run_full_pipeline(cli_args):
     df_one_img = pd.read_csv("products_one_by_image.csv")
     extracted_numbers = []
     barcode_image_links = []
+    number_usage_rows = []
     for idx, row in df_one_img.iterrows():
         images = row.get("images", "[]")
         try:
@@ -462,6 +463,7 @@ def run_full_pipeline(cli_args):
                 found_link = img_url
                 break
         barcode_image_links.append(found_link if found_link else "")
+        usage_str = "prompt_token_count: None candidates_token_count: None total_token_count: None"
         if found_link:
             try:
                 gemini = GeminiInference(
@@ -469,16 +471,27 @@ def run_full_pipeline(cli_args):
                     model_name=cli_args.gemini_api_model,
                     car_brand=row.get("description_model_guess", None),
                 )
-                number = gemini(found_link)
+                # Предполагаем, что inference возвращает usage если return_usage=True
+                number, usage = (
+                    gemini(found_link, return_usage=True)
+                    if hasattr(gemini, "__call__")
+                    and "return_usage" in gemini.__call__.__code__.co_varnames
+                    else (gemini(found_link), None)
+                )
+                if usage and isinstance(usage, dict):
+                    usage_str = f"prompt_token_count: {usage.get('prompt_token_count', 'None')} candidates_token_count: {usage.get('candidates_token_count', 'None')} total_token_count: {usage.get('total_token_count', 'None')}"
             except Exception as e:
                 logging.warning(f"[GeminiInference] Ошибка для {found_link}: {e}")
                 number = "ERROR"
         else:
             number = ""
         extracted_numbers.append(number)
+        number_usage_rows.append({"_pb": usage_str})
     df_one_img["barcode_image_link"] = barcode_image_links
     df_one_img["extracted_number_from_barcode_image"] = extracted_numbers
     df_one_img.to_csv("products_one_by_image_with_number.csv", index=False)
+    # Сохраняем usage для номера
+    pd.DataFrame(number_usage_rows).to_csv("products_number_usage.csv", index=False)
 
     # 8. Финальный отсев many/one по результатам инференса номера
     def has_many_final(preds):
@@ -491,21 +504,54 @@ def run_full_pipeline(cli_args):
     mask_many_final = preds_col.apply(has_many_final)
     df_many_final = df_final[mask_many_final].copy()
     df_one_final = df_final[~mask_many_final].copy()
-    # append many к products_many.csv
+
+    # Собираем все many в один финальный файл
+    many_files = [
+        "products_many.csv",
+        "products_many_by_image.csv",
+    ]
+    many_dfs = []
+    for f in many_files:
+        if os.path.exists(f):
+            many_dfs.append(pd.read_csv(f))
     if not df_many_final.empty:
-        if os.path.exists(df_many_path):
-            df_many_total = pd.read_csv(df_many_path)
-            df_many_total = pd.concat([df_many_total, df_many_final], ignore_index=True)
-        else:
-            df_many_total = df_many_final.copy()
-        df_many_total.to_csv(df_many_path, index=False)
+        many_dfs.append(df_many_final)
+
+    many_count = 0
+    if many_dfs:
+        # Привести к общему набору столбцов
+        all_cols = set()
+        for df in many_dfs:
+            all_cols.update(df.columns)
+        all_cols = sorted(all_cols)
+        many_dfs = [df.reindex(columns=all_cols) for df in many_dfs]
+        df_many_final_all = pd.concat(many_dfs, ignore_index=True)
+        df_many_final_all.to_csv("products_many_final.csv", index=False)
+        many_count = len(df_many_final_all)
+    else:
+        pd.DataFrame().to_csv("products_many_final.csv", index=False)
+
+    one_count = 0
+    if one_dfs:
+        all_cols = set()
+        for df in one_dfs:
+            all_cols.update(df.columns)
+        all_cols = sorted(all_cols)
+        one_dfs = [df.reindex(columns=all_cols) for df in one_dfs]
+        df_one_final_all = pd.concat(one_dfs, ignore_index=True)
+        df_one_final_all.to_csv("products_one_final.csv", index=False)
+        one_count = len(df_one_final_all)
+    else:
+        pd.DataFrame().to_csv("products_one_final.csv", index=False)
+
+    logging.info(
+        f"[FINAL DATASETS] Созданы products_many_final.csv: {many_count} строк, products_one_final.csv: {one_count} строк"
+    )
+
     # Логирование split после финального отсела
     logging.info(
         f"[SPLIT final] Добавлено в many: {len(df_many_final)}; в one: {len(df_one_final)}"
     )
-    df_one_final.to_csv("products_one.csv", index=False)
-    # products_many.csv уже обновлен выше
-
     return None
 
 
@@ -615,6 +661,28 @@ if __name__ == "__main__":
             stage = usage_file
         try:
             df = pd.read_csv(usage_file)
+            # Если только одна колонка _pb, парсим usage из текста
+            if set(df.columns) == {"_pb"}:
+                import re
+
+                prompt_sum = 0
+                candidates_sum = 0
+                total_sum = 0
+                for val in df["_pb"].astype(str):
+                    m = re.search(r"prompt_token_count: (\d+)", val)
+                    if m:
+                        prompt_sum += int(m.group(1))
+                    m = re.search(r"candidates_token_count: (\d+)", val)
+                    if m:
+                        candidates_sum += int(m.group(1))
+                    m = re.search(r"total_token_count: (\d+)", val)
+                    if m:
+                        total_sum += int(m.group(1))
+                stage_totals[stage] = (prompt_sum, candidates_sum, total_sum)
+                total_prompt += prompt_sum
+                total_candidates += candidates_sum
+                total_tokens += total_sum
+                continue
             missing = [col for col in required_cols if col not in df.columns]
             if missing:
                 logging.warning(
