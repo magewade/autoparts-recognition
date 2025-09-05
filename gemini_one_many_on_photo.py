@@ -9,8 +9,8 @@ from pathlib import Path
 
 # Новый промпт для одновременного определения one/many и наличия наклейки с баркодом и брендом
 PHOTO_ONE_MANY_BARCODE_PROMPT = (
-    "If there is more than one unique physical car part visible, output 'many'. "
     "If there is only one unique physical car part, output 'one'. "
+    "If there are few unique physical car details (more than one) visible, output 'many'. "
     "If there is a visible sticker or label with both a barcode and a brand name, output 'True', otherwise output 'False'. "
     "Output strictly in the format: one|True, one|False, many|True, or many|False. Do not explain your answer. If you don't know, output 'unknown|unknown'."
 )

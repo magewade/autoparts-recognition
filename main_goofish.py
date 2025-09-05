@@ -20,7 +20,6 @@ logging.basicConfig(
 )
 
 
-
 def extract_model_from_description(
     input_csv="parsed_products.csv",
     output_csv="parsed_products_with_model.csv",
@@ -375,19 +374,29 @@ def run_full_pipeline(cli_args):
         df_one["image_predictions"] = image_predictions
         df_one.to_csv("products_one_with_image_analysis.csv", index=False)
 
-        # --- Дальнейший пайплайн только для one (теперь используем products_one_with_image_analysis.csv) ---
-        one_input_csv = "products_one_with_image_analysis.csv"
+        # --- Отсекаем many по image_predictions ---
+        def has_many(preds):
+            return any(str(p).lower().startswith("many") for p in preds)
+
+        mask_many_img = df_one["image_predictions"].apply(has_many)
+        df_many_img = df_one[mask_many_img].copy()
+        df_one_img = df_one[~mask_many_img].copy()
+        df_many_img.to_csv("products_many_by_image.csv", index=False)
+        df_one_img.to_csv("products_one_by_image.csv", index=False)
+
+        # --- Дальнейший пайплайн только для one (products_one_by_image.csv) ---
+        one_input_csv = "products_one_by_image.csv"
         if os.path.exists(output_csv):
             df_final = pd.read_csv(output_csv)
             n_final = len(df_final)
-            if n_final >= len(df_one):
+            if n_final >= len(df_one_img):
                 logging.info(
                     "final_products.csv найден и все строки обработаны, пропускаем инференс"
                 )
                 inference_time = None
             else:
                 logging.info(
-                    f"final_products.csv найден, обработано {n_final} из {len(df_one)} — доинференсим оставшиеся"
+                    f"final_products.csv найден, обработано {n_final} из {len(df_one_img)} — доинференсим оставшиеся"
                 )
                 t_inf = time.time()
                 run_inference(parsed_csv=one_input_csv, output_csv=output_csv)
