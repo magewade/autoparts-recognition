@@ -1,3 +1,4 @@
+from dataclasses import asdict, is_dataclass
 import re
 import google.generativeai as genai
 import logging
@@ -29,6 +30,33 @@ def clean_llm_output(guess):
     elif one_or_many != "many":
         one_or_many = "one"
     return f"{model} | {numbers_str} | {one_or_many}"
+
+
+def usage_to_dict(usage):
+    if usage is None:
+        return {
+            "prompt_token_count": None,
+            "candidates_token_count": None,
+            "total_token_count": None,
+        }
+    if isinstance(usage, dict):
+        return usage
+    if is_dataclass(usage):
+        return asdict(usage)
+    if hasattr(usage, "__dict__"):
+        return vars(usage)
+    try:
+        return {
+            k: getattr(usage, k)
+            for k in dir(usage)
+            if not k.startswith("_") and not callable(getattr(usage, k))
+        }
+    except Exception:
+        return {
+            "prompt_token_count": None,
+            "candidates_token_count": None,
+            "total_token_count": None,
+        }
 
 
 class GeminiDescriptionInference:
@@ -100,15 +128,11 @@ class GeminiDescriptionInference:
                 if hasattr(response, "result") and hasattr(
                     response.result, "usage_metadata"
                 ):
-                    usage = dict(response.result.usage_metadata)
+                    usage = usage_to_dict(response.result.usage_metadata)
                 elif hasattr(response, "usage_metadata"):
-                    usage = dict(response.usage_metadata)
+                    usage = usage_to_dict(response.usage_metadata)
                 else:
-                    usage = {
-                        "prompt_token_count": None,
-                        "candidates_token_count": None,
-                        "total_token_count": None,
-                    }
+                    usage = usage_to_dict(None)
                 logging.info(f"[LLM desc] Ответ: {guess}")
                 time.sleep(2.1)  # <= 30 запросов в минуту
                 if return_usage:
