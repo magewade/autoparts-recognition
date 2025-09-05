@@ -413,10 +413,6 @@ def run_full_pipeline(cli_args):
             usage_rows.append(row)
     usage_df = pd.DataFrame(usage_rows)
     usage_df.to_csv("products_image_usage.csv", index=False)
-    # Логирование split после image analysis
-    logging.info(
-        f"[SPLIT image] Добавлено в many: {len(df_many_img)}; в one: {len(df_one_img)}"
-    )
 
     # 6. Отсев many/one по картинкам, many добавляем к products_many.csv
     def has_many(preds):
@@ -425,6 +421,10 @@ def run_full_pipeline(cli_args):
     mask_many_img = df_one["image_predictions"].apply(has_many)
     df_many_img = df_one[mask_many_img].copy()
     df_one_img = df_one[~mask_many_img].copy()
+    # Логирование split после image analysis
+    logging.info(
+        f"[SPLIT image] Добавлено в many: {len(df_many_img)}; в one: {len(df_one_img)}"
+    )
     # append many к products_many.csv
     df_many_path = "products_many.csv"
     if os.path.exists(df_many_path):
