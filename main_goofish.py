@@ -325,51 +325,52 @@ def main():
 
 
 def run_full_pipeline(cli_args):
-    # --- Извлечение номера с первой картинки с one|True (штрихкод) ---
-    from gemini_model import GeminiInference
-
-    df_one_img = pd.read_csv("products_one_by_image.csv")
-    extracted_numbers = []
-    barcode_image_links = []
-    # Для каждого товара ищем первую ссылку с one|True
-    for idx, row in df_one_img.iterrows():
-        images = row.get("images", "[]")
-        try:
-            images_list = (
-                ast.literal_eval(images) if isinstance(images, str) else images
-            )
-        except Exception:
-            images_list = []
-        preds = row.get("image_predictions", [])
-        if isinstance(preds, str):
+    one_input_csv = "products_one_by_image.csv"
+    if os.path.exists(one_input_csv):
+        df_one_img = pd.read_csv(one_input_csv)
+        extracted_numbers = []
+        barcode_image_links = []
+        for idx, row in df_one_img.iterrows():
+            images = row.get("images", "[]")
             try:
-                preds = ast.literal_eval(preds)
-            except Exception:
-                preds = []
-        # Найти первую ссылку с one|True
-        found_link = None
-        for img_url, pred in zip(images_list, preds):
-            if str(pred).strip().lower() == "one|true":
-                found_link = img_url
-                break
-        barcode_image_links.append(found_link if found_link else "")
-        if found_link:
-            try:
-                gemini = GeminiInference(
-                    api_keys=cli_args.api_keys,
-                    model_name=cli_args.gemini_api_model,
-                    car_brand=row.get("description_model_guess", None),
+                images_list = (
+                    ast.literal_eval(images) if isinstance(images, str) else images
                 )
-                number = gemini(found_link)
-            except Exception as e:
-                logging.warning(f"[GeminiInference] Ошибка для {found_link}: {e}")
-                number = "ERROR"
-        else:
-            number = ""
-        extracted_numbers.append(number)
-    df_one_img["barcode_image_link"] = barcode_image_links
-    df_one_img["extracted_number_from_barcode_image"] = extracted_numbers
-    df_one_img.to_csv("products_one_by_image_with_number.csv", index=False)
+            except Exception:
+                images_list = []
+            preds = row.get("image_predictions", [])
+            if isinstance(preds, str):
+                try:
+                    preds = ast.literal_eval(preds)
+                except Exception:
+                    preds = []
+            found_link = None
+            for img_url, pred in zip(images_list, preds):
+                if str(pred).strip().lower() == "one|true":
+                    found_link = img_url
+                    break
+            barcode_image_links.append(found_link if found_link else "")
+            if found_link:
+                try:
+                    gemini = GeminiInference(
+                        api_keys=cli_args.api_keys,
+                        model_name=cli_args.gemini_api_model,
+                        car_brand=row.get("description_model_guess", None),
+                    )
+                    number = gemini(found_link)
+                except Exception as e:
+                    logging.warning(f"[GeminiInference] Ошибка для {found_link}: {e}")
+                    number = "ERROR"
+            else:
+                number = ""
+            extracted_numbers.append(number)
+        df_one_img["barcode_image_link"] = barcode_image_links
+        df_one_img["extracted_number_from_barcode_image"] = extracted_numbers
+        df_one_img.to_csv("products_one_by_image_with_number.csv", index=False)
+    else:
+        logging.info(
+            "products_one_by_image.csv не найден, этап извлечения номера пропущен."
+        )
     parsed_csv = "parsed_products.csv"
     parsed_with_model_csv = "parsed_products_with_model.csv"
     output_csv = "final_products.csv"
@@ -465,6 +466,15 @@ def run_full_pipeline(cli_args):
         mask_many_img = df_one["image_predictions"].apply(has_many)
         df_many_img = df_one[mask_many_img].copy()
         df_one_img = df_one[~mask_many_img].copy()
+
+        # --- Добавляем many по картинкам к products_many.csv ---
+        df_many_path = "products_many.csv"
+        if os.path.exists(df_many_path):
+            df_many_total = pd.read_csv(df_many_path)
+            df_many_total = pd.concat([df_many_total, df_many_img], ignore_index=True)
+        else:
+            df_many_total = df_many_img.copy()
+        df_many_total.to_csv(df_many_path, index=False)
         df_many_img.to_csv("products_many_by_image.csv", index=False)
         df_one_img.to_csv("products_one_by_image.csv", index=False)
 
@@ -514,6 +524,33 @@ def run_full_pipeline(cli_args):
         df_one_img["barcode_image_link"] = barcode_image_links
         df_one_img["extracted_number_from_barcode_image"] = extracted_numbers
         df_one_img.to_csv("products_one_by_image_with_number.csv", index=False)
+
+        # --- Финальный отсев many/one по результатам инференса номера ---
+        def has_many_final(preds):
+            return any(str(p).lower().startswith("many") for p in preds)
+
+        df_final = pd.read_csv("products_one_by_image_with_number.csv")
+        preds_col = df_final["image_predictions"]
+        if preds_col.apply(lambda x: isinstance(x, str)).all():
+            preds_col = preds_col.apply(lambda x: ast.literal_eval(x) if x else [])
+        mask_many_final = preds_col.apply(has_many_final)
+        df_many_final = df_final[mask_many_final].copy()
+        df_one_final = df_final[~mask_many_final].copy()
+
+        # Добавляем новых many к products_many.csv
+        if not df_many_final.empty:
+            if os.path.exists(df_many_path):
+                df_many_total = pd.read_csv(df_many_path)
+                df_many_total = pd.concat(
+                    [df_many_total, df_many_final], ignore_index=True
+                )
+            else:
+                df_many_total = df_many_final.copy()
+            df_many_total.to_csv(df_many_path, index=False)
+
+        # Сохраняем финальные one/many
+        df_one_final.to_csv("products_one.csv", index=False)
+        # products_many.csv уже обновлен выше
 
         # --- Далее можно использовать products_one_by_image_with_number.csv для следующих шагов ---
         if os.path.exists(output_csv):
