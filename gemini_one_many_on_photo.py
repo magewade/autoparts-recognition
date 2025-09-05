@@ -215,9 +215,7 @@ class GeminiPhotoOneManyBarcodeInference:
                 continue
             if return_usage:
                 answer, usage = result
-                logging.info(
-                    f"[LLM photo one/many+barcode] Ответ: {answer} | usage: {usage}"
-                )
+                logging.info(f"[LLM photo one/many+barcode] Ответ: {answer}")
                 if any(
                     answer.lower().startswith(x) for x in ("one|", "many|", "unknown|")
                 ):

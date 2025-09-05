@@ -1,3 +1,34 @@
+from dataclasses import asdict, is_dataclass
+
+
+# Универсальная функция для приведения usage к dict
+def usage_to_dict(usage):
+    if usage is None:
+        return {
+            "prompt_token_count": None,
+            "candidates_token_count": None,
+            "total_token_count": None,
+        }
+    if isinstance(usage, dict):
+        return usage
+    if is_dataclass(usage):
+        return asdict(usage)
+    if hasattr(usage, "__dict__"):
+        return vars(usage)
+    try:
+        return {
+            k: getattr(usage, k)
+            for k in dir(usage)
+            if not k.startswith("_") and not callable(getattr(usage, k))
+        }
+    except Exception:
+        return {
+            "prompt_token_count": None,
+            "candidates_token_count": None,
+            "total_token_count": None,
+        }
+
+
 import google.generativeai as genai
 from pathlib import Path
 import random
@@ -198,15 +229,11 @@ class GeminiInference:
                 if hasattr(response, "result") and hasattr(
                     response.result, "usage_metadata"
                 ):
-                    usage = dict(response.result.usage_metadata)
+                    usage = usage_to_dict(response.result.usage_metadata)
                 elif hasattr(response, "usage_metadata"):
-                    usage = dict(response.usage_metadata)
+                    usage = usage_to_dict(response.usage_metadata)
                 else:
-                    usage = {
-                        "prompt_token_count": None,
-                        "candidates_token_count": None,
-                        "total_token_count": None,
-                    }
+                    usage = usage_to_dict(None)
 
                 return (response.text, usage) if return_usage else response.text
 

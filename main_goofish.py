@@ -363,6 +363,18 @@ def run_full_pipeline(cli_args):
     mask_many = df_parsed["description_model_guess"].apply(get_one_many) == "many"
     df_many = df_parsed[mask_many].copy()
     df_one = df_parsed[~mask_many].copy()
+    import hashlib
+
+    def df_hash(df):
+        return (
+            hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
+            if not df.empty
+            else "EMPTY"
+        )
+
+    logging.info(
+        f"[SPLIT desc] Добавлено в many: {len(df_many)}, hash: {df_hash(df_many)}; в one: {len(df_one)}, hash: {df_hash(df_one)}"
+    )
     df_many.to_csv("products_many.csv", index=False)
     df_one.to_csv("products_one.csv", index=False)
 
@@ -378,27 +390,31 @@ def run_full_pipeline(cli_args):
                 ast.literal_eval(images) if isinstance(images, str) else images
             )
         except Exception:
-            images_list = []
-        if not images_list:
-            image_predictions.append([])
-            image_usage_stats.append([])
-            continue
-        try:
-            preds, usage = process_images_one_many_and_barcode_label(
-                images_list,
-                api_keys=cli_args.api_keys,
-                model_name=cli_args.gemini_api_model,
+            usage_rows = []
+            total_prompt = 0
+            total_candidates = 0
+            total_tokens = 0
+            for idx, usage_list in enumerate(image_usage_stats):
+                for img_idx, usage in enumerate(usage_list):
+                    row = {"row": idx, "image_idx": img_idx}
+                    row.update(usage)
+                    usage_rows.append(row)
+                    # Суммируем usage
+                    try:
+                        total_prompt += int(usage.get("prompt_token_count") or 0)
+                        total_candidates += int(
+                            usage.get("candidates_token_count") or 0
+                        )
+                        total_tokens += int(usage.get("total_token_count") or 0)
+                    except Exception:
+                        pass
+            usage_df = pd.DataFrame(usage_rows)
+            usage_df.to_csv("products_image_usage.csv", index=False)
+
+            # Логируем итоговые usage суммы (только один раз в конце)
+            logging.info(
+                f"[TOKENS image] prompt: {total_prompt}, candidates: {total_candidates}, total: {total_tokens}"
             )
-        except Exception as e:
-            logging.warning(f"[Image one/many+barcode step] Error for row {idx}: {e}")
-            preds = ["unknown|unknown"] * len(images_list)
-            usage = [
-                {
-                    "prompt_token_count": None,
-                    "candidates_token_count": None,
-                    "total_token_count": None,
-                }
-            ] * len(images_list)
         image_predictions.append(preds)
         image_usage_stats.append(usage)
     df_one["image_predictions"] = image_predictions
@@ -411,6 +427,10 @@ def run_full_pipeline(cli_args):
             usage_rows.append(row)
     usage_df = pd.DataFrame(usage_rows)
     usage_df.to_csv("products_image_usage.csv", index=False)
+    # Логирование split после image analysis
+    logging.info(
+        f"[SPLIT image] Добавлено в many: {len(df_many_img)}, hash: {df_hash(df_many_img)}; в one: {len(df_one_img)}, hash: {df_hash(df_one_img)}"
+    )
 
     # 6. Отсев many/one по картинкам, many добавляем к products_many.csv
     def has_many(preds):
@@ -493,6 +513,10 @@ def run_full_pipeline(cli_args):
         else:
             df_many_total = df_many_final.copy()
         df_many_total.to_csv(df_many_path, index=False)
+    # Логирование split после финального отсела
+    logging.info(
+        f"[SPLIT final] Добавлено в many: {len(df_many_final)}, hash: {df_hash(df_many_final)}; в one: {len(df_one_final)}, hash: {df_hash(df_one_final)}"
+    )
     df_one_final.to_csv("products_one.csv", index=False)
     # products_many.csv уже обновлен выше
 
@@ -579,7 +603,7 @@ if __name__ == "__main__":
         f"\n====================="
     )
 
-    # --- Финальный подсчет usage_metadata по всем моделям (если usage собирается в пайплайне) ---
+    # --- Финальный подсчет usage_metadata по всем моделям ---
     import glob
     import pandas as pd
 
@@ -587,14 +611,46 @@ if __name__ == "__main__":
     total_prompt = 0
     total_candidates = 0
     total_tokens = 0
+    required_cols = [
+        "prompt_token_count",
+        "candidates_token_count",
+        "total_token_count",
+    ]
+    stage_totals = {}
     for usage_file in usage_files:
+        stage = None
+        if "description" in usage_file:
+            stage = "Description LLM"
+        elif "image" in usage_file:
+            stage = "Image LLM (one/many/barcode)"
+        elif "number" in usage_file:
+            stage = "Number Extraction LLM"
+        else:
+            stage = usage_file
         try:
             df = pd.read_csv(usage_file)
-            total_prompt += df["prompt_token_count"].fillna(0).sum()
-            total_candidates += df["candidates_token_count"].fillna(0).sum()
-            total_tokens += df["total_token_count"].fillna(0).sum()
+            missing = [col for col in required_cols if col not in df.columns]
+            if missing:
+                logging.warning(
+                    f"[USAGE] В файле {usage_file} отсутствуют колонки: {missing}. Пропускаю этот файл."
+                )
+                continue
+            prompt_sum = df["prompt_token_count"].fillna(0).sum()
+            candidates_sum = df["candidates_token_count"].fillna(0).sum()
+            total_sum = df["total_token_count"].fillna(0).sum()
+            stage_totals[stage] = (prompt_sum, candidates_sum, total_sum)
+            total_prompt += prompt_sum
+            total_candidates += candidates_sum
+            total_tokens += total_sum
         except Exception as e:
             logging.warning(f"[USAGE] Не удалось прочитать {usage_file}: {e}")
+    if stage_totals:
+        logging.info("\n==== TOKEN USAGE BY STAGE ====")
+        for stage, (prompt_sum, candidates_sum, total_sum) in stage_totals.items():
+            logging.info(
+                f"{stage}: prompt={int(prompt_sum)}, candidates={int(candidates_sum)}, total={int(total_sum)}"
+            )
+        logging.info("=============================")
     if usage_files:
         logging.info(f"\n==== TOTAL TOKEN USAGE ====")
         logging.info(f"Prompt tokens: {int(total_prompt)}")
