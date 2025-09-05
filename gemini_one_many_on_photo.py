@@ -14,8 +14,40 @@ PHOTO_ONE_MANY_PROMPT = (
 )
 
 
+def process_images_one_many_and_barcodes(
+    image_paths, api_keys, model_name="gemini-2.0-flash-lite", barcode_brand_model=None
+):
+    """
+    Для списка image_paths:
+    - Прогоняет каждую через GeminiPhotoOneManyInference (one/many).
+    - Если хотя бы на одной фото many — возвращает ('many', ...)
+    - Для каждой фото вызывает barcode_brand_model (если передан), чтобы найти штрихкод с брендом (и не задняя часть).
+    - Возвращает ('one'/'many', [список фото с нужным штрихкодом и брендом])
+    """
+    one_many_model = GeminiPhotoOneManyInference(api_keys, model_name=model_name)
+    barcode_images = []
+    first_barcode_image = None
+    for img_path in image_paths:
+        # 1. Проверка one/many
+        result = one_many_model(img_path)
+        if result == "many":
+            return "many", barcode_images, first_barcode_image
+        # 2. Проверка на штрихкод+бренд (если есть модель)
+        if barcode_brand_model is not None:
+            try:
+                has_barcode_brand = barcode_brand_model(img_path)
+                if has_barcode_brand:
+                    barcode_images.append(img_path)
+                    if first_barcode_image is None:
+                        first_barcode_image = img_path
+            except Exception as e:
+                logging.warning(f"[Barcode check] Error for {img_path}: {e}")
+    return "one", barcode_images, first_barcode_image
+
+
 class GeminiPhotoOneManyInference:
-    def __init__(self, api_keys, model_name="gemini-2.5-flash-lite"):
+
+    def __init__(self, api_keys, model_name="gemini-2.0-flash-lite"):
         self.api_keys = api_keys
         self.current_key_index = 0
         self.model_name = model_name

@@ -355,7 +355,49 @@ def run_full_pipeline(cli_args):
             f"Сохранено: products_many.csv (many: {len(df_many)}), products_one.csv (one: {len(df_one)})"
         )
 
-        # --- Дальнейший пайплайн только для one ---
+        # --- Новый шаг: анализ всех изображений для one (image_one_many, barcode_brand_images, first_barcode_brand_image) ---
+        from gemini_one_many_on_photo import process_images_one_many_and_barcodes
+        import ast
+
+        df_one = df_one.copy()
+        image_one_many = []
+        barcode_brand_images = []
+        first_barcode_brand_image = []
+        for idx, row in df_one.iterrows():
+            images = row.get("images", "[]")
+            try:
+                images_list = (
+                    ast.literal_eval(images) if isinstance(images, str) else images
+                )
+            except Exception:
+                images_list = []
+            if not images_list:
+                image_one_many.append("unknown")
+                barcode_brand_images.append([])
+                first_barcode_brand_image.append("")
+                continue
+            try:
+                one_many, barcode_imgs, first_barcode = (
+                    process_images_one_many_and_barcodes(
+                        images_list,
+                        api_keys=cli_args.api_keys,
+                        model_name=cli_args.gemini_api_model,
+                        barcode_brand_model=None,  # можно заменить на свою модель, если есть
+                    )
+                )
+            except Exception as e:
+                logging.warning(f"[Image one/many step] Error for row {idx}: {e}")
+                one_many, barcode_imgs, first_barcode = "unknown", [], ""
+            image_one_many.append(one_many)
+            barcode_brand_images.append(barcode_imgs)
+            first_barcode_brand_image.append(first_barcode if first_barcode else "")
+        df_one["image_one_many"] = image_one_many
+        df_one["barcode_brand_images"] = barcode_brand_images
+        df_one["first_barcode_brand_image"] = first_barcode_brand_image
+        df_one.to_csv("products_one_with_image_analysis.csv", index=False)
+
+        # --- Дальнейший пайплайн только для one (теперь используем products_one_with_image_analysis.csv) ---
+        one_input_csv = "products_one_with_image_analysis.csv"
         if os.path.exists(output_csv):
             df_final = pd.read_csv(output_csv)
             n_final = len(df_final)
@@ -369,11 +411,11 @@ def run_full_pipeline(cli_args):
                     f"final_products.csv найден, обработано {n_final} из {len(df_one)} — доинференсим оставшиеся"
                 )
                 t_inf = time.time()
-                run_inference(parsed_csv="products_one.csv", output_csv=output_csv)
+                run_inference(parsed_csv=one_input_csv, output_csv=output_csv)
                 inference_time = time.time() - t_inf
         else:
             t_inf = time.time()
-            run_inference(parsed_csv="products_one.csv", output_csv=output_csv)
+            run_inference(parsed_csv=one_input_csv, output_csv=output_csv)
             inference_time = time.time() - t_inf
     else:
         logging.warning("parsed_products.csv не найден, инференс невозможен")
