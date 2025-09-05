@@ -389,9 +389,30 @@ def run_full_pipeline(cli_args):
             else:
                 images_list = []
         if images_list:
-            preds, usage = process_images_one_many_and_barcode_label(
-                images_list, api_keys, model_name="gemini-2.0-flash-lite"
-            )
+            preds = []
+            usage = []
+            for img_idx, img_url in enumerate(images_list):
+                logging.info(
+                    f"[Photo LLM] Проверяем строку {idx}, картинка {img_idx}: {img_url}"
+                )
+                try:
+                    pred, usage_item = process_images_one_many_and_barcode_label(
+                        [img_url], api_keys, model_name="gemini-2.0-flash-lite"
+                    )
+                    preds.extend(pred)
+                    usage.extend(usage_item)
+                    if pred and str(pred[0]).lower().startswith("many"):
+                        break
+                except Exception as e:
+                    logging.warning(f"[Photo LLM] Ошибка при обработке {img_url}: {e}")
+                    preds.append("unknown|unknown")
+                    usage.append(
+                        {
+                            "prompt_token_count": None,
+                            "candidates_token_count": None,
+                            "total_token_count": None,
+                        }
+                    )
         else:
             preds = ["unknown|unknown"]
             usage = [
@@ -530,6 +551,17 @@ def run_full_pipeline(cli_args):
         many_count = len(df_many_final_all)
     else:
         pd.DataFrame().to_csv("products_many_final.csv", index=False)
+
+    # Собираем все one в один финальный файл
+    one_files = [
+        "products_one_by_image_with_number.csv",
+    ]
+    one_dfs = []
+    for f in one_files:
+        if os.path.exists(f):
+            one_dfs.append(pd.read_csv(f))
+    if not df_one_final.empty:
+        one_dfs.append(df_one_final)
 
     one_count = 0
     if one_dfs:
