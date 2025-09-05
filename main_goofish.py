@@ -379,30 +379,28 @@ def run_full_pipeline(cli_args):
                 ast.literal_eval(images) if isinstance(images, str) else images
             )
         except Exception:
-            preds = []
-            usage = []
-            usage_rows = []
-            total_prompt = 0
-            total_candidates = 0
-            total_tokens = 0
-            for idx2, usage_list in enumerate(image_usage_stats):
-                for img_idx, usage_item in enumerate(usage_list):
-                    row2 = {"row": idx2, "image_idx": img_idx}
-                    row2.update(usage_item)
-                    usage_rows.append(row2)
-                    try:
-                        total_prompt += int(usage_item.get("prompt_token_count") or 0)
-                        total_candidates += int(
-                            usage_item.get("candidates_token_count") or 0
-                        )
-                        total_tokens += int(usage_item.get("total_token_count") or 0)
-                    except Exception:
-                        pass
-            usage_df = pd.DataFrame(usage_rows)
-            usage_df.to_csv("products_image_usage.csv", index=False)
-            logging.info(
-                f"[TOKENS image] prompt: {total_prompt}, candidates: {total_candidates}, total: {total_tokens}"
+            logging.warning(
+                f"[Image analysis] Не удалось обработать images для строки {idx}, images: {images}"
             )
+            # Попробуем взять первую картинку, если есть поле 'image' или 'image_url'
+            first_image = row.get("image") or row.get("image_url")
+            if first_image:
+                images_list = [first_image]
+            else:
+                images_list = []
+        if images_list:
+            preds, usage = process_images_one_many_and_barcode_label(
+                images_list, api_keys, model_name="gemini-2.0-flash-lite"
+            )
+        else:
+            preds = ["unknown|unknown"]
+            usage = [
+                {
+                    "prompt_token_count": None,
+                    "candidates_token_count": None,
+                    "total_token_count": None,
+                }
+            ]
         image_predictions.append(preds)
         image_usage_stats.append(usage)
     df_one["image_predictions"] = image_predictions
