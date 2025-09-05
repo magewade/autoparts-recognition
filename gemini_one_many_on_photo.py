@@ -1,3 +1,4 @@
+from dataclasses import asdict, is_dataclass
 import google.generativeai as genai
 import logging
 import time
@@ -14,6 +15,34 @@ PHOTO_ONE_MANY_BARCODE_PROMPT = (
     "If there is a visible sticker or label with both a barcode and a brand name, output 'True', otherwise output 'False'. "
     "Output strictly in the format: one|True, one|False, many|True, or many|False. Do not explain your answer. If you don't know, output 'unknown|unknown'."
 )
+
+
+# Универсальная функция для приведения usage к dict
+def usage_to_dict(usage):
+    if usage is None:
+        return {
+            "prompt_token_count": None,
+            "candidates_token_count": None,
+            "total_token_count": None,
+        }
+    if isinstance(usage, dict):
+        return usage
+    if is_dataclass(usage):
+        return asdict(usage)
+    if hasattr(usage, "__dict__"):
+        return vars(usage)
+    try:
+        return {
+            k: getattr(usage, k)
+            for k in dir(usage)
+            if not k.startswith("_") and not callable(getattr(usage, k))
+        }
+    except Exception:
+        return {
+            "prompt_token_count": None,
+            "candidates_token_count": None,
+            "total_token_count": None,
+        }
 
 
 # --- Основная функция для пакетной обработки списка картинок ---
@@ -117,19 +146,15 @@ class GeminiPhotoOneManyBarcodeInference:
                     cand = response.candidates[0]
                     if cand.content and cand.content.parts:
                         answer_text = cand.content.parts[0].text
-                # usage_metadata всегда на верхнем уровне ответа
-                if hasattr(response, "result") and hasattr(
-                    response.result, "usage_metadata"
-                ):
-                    usage = dict(response.result.usage_metadata)
-                elif hasattr(response, "usage_metadata"):
-                    usage = dict(response.usage_metadata)
-                else:
-                    usage = {
-                        "prompt_token_count": None,
-                        "candidates_token_count": None,
-                        "total_token_count": None,
-                    }
+                    # usage_metadata всегда на верхнем уровне ответа
+                    if hasattr(response, "result") and hasattr(
+                        response.result, "usage_metadata"
+                    ):
+                        usage = usage_to_dict(response.result.usage_metadata)
+                    elif hasattr(response, "usage_metadata"):
+                        usage = usage_to_dict(response.usage_metadata)
+                    else:
+                        usage = usage_to_dict(None)
 
                 if not answer_text:
                     logging.warning("[Photo LLM] Empty answer from model")
