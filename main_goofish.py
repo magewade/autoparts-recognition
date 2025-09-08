@@ -371,12 +371,16 @@ def run_full_pipeline(cli_args):
     one_path = "products_one.csv"
     if os.path.exists(many_path):
         df_many_prev = pd.read_csv(many_path)
-        df_many = pd.concat(
-            [df_many_prev, df_many], ignore_index=True
-        ).drop_duplicates()
+        all_cols = sorted(set(df_many_prev.columns) | set(df_many.columns))
+        df_many_prev = df_many_prev.reindex(columns=all_cols)
+        df_many = df_many.reindex(columns=all_cols)
+        df_many = pd.concat([df_many_prev, df_many], ignore_index=True)
     if os.path.exists(one_path):
         df_one_prev = pd.read_csv(one_path)
-        df_one = pd.concat([df_one_prev, df_one], ignore_index=True).drop_duplicates()
+        all_cols = sorted(set(df_one_prev.columns) | set(df_one.columns))
+        df_one_prev = df_one_prev.reindex(columns=all_cols)
+        df_one = df_one.reindex(columns=all_cols)
+        df_one = pd.concat([df_one_prev, df_one], ignore_index=True)
     df_many.to_csv(many_path, index=False)
     df_one.to_csv(one_path, index=False)
     total = len(df_many) + len(df_one)
@@ -459,28 +463,30 @@ def run_full_pipeline(cli_args):
     mask_many_img = df_one["image_predictions"].apply(has_many)
     df_many_img = df_one[mask_many_img].copy()
     df_one_img = df_one[~mask_many_img].copy()
-    # Дозаписываем many/one по картинкам, избегая дубликатов
     many_img_path = "products_many_by_image.csv"
     one_img_path = "products_one_by_image.csv"
     if os.path.exists(many_img_path):
         df_many_img_prev = pd.read_csv(many_img_path)
-        df_many_img = pd.concat(
-            [df_many_img_prev, df_many_img], ignore_index=True
-        ).drop_duplicates()
+        all_cols = sorted(set(df_many_img_prev.columns) | set(df_many_img.columns))
+        df_many_img_prev = df_many_img_prev.reindex(columns=all_cols)
+        df_many_img = df_many_img.reindex(columns=all_cols)
+        df_many_img = pd.concat([df_many_img_prev, df_many_img], ignore_index=True)
     if os.path.exists(one_img_path):
         df_one_img_prev = pd.read_csv(one_img_path)
-        df_one_img = pd.concat(
-            [df_one_img_prev, df_one_img], ignore_index=True
-        ).drop_duplicates()
+        all_cols = sorted(set(df_one_img_prev.columns) | set(df_one_img.columns))
+        df_one_img_prev = df_one_img_prev.reindex(columns=all_cols)
+        df_one_img = df_one_img.reindex(columns=all_cols)
+        df_one_img = pd.concat([df_one_img_prev, df_one_img], ignore_index=True)
     df_many_img.to_csv(many_img_path, index=False)
     df_one_img.to_csv(one_img_path, index=False)
     # append many к products_many.csv (кумулятивно)
     df_many_path = "products_many.csv"
     if os.path.exists(df_many_path):
         df_many_total = pd.read_csv(df_many_path)
-        df_many_total = pd.concat(
-            [df_many_total, df_many_img], ignore_index=True
-        ).drop_duplicates()
+        all_cols = sorted(set(df_many_total.columns) | set(df_many_img.columns))
+        df_many_total = df_many_total.reindex(columns=all_cols)
+        df_many_img = df_many_img.reindex(columns=all_cols)
+        df_many_total = pd.concat([df_many_total, df_many_img], ignore_index=True)
     else:
         df_many_total = df_many_img.copy()
     df_many_total.to_csv(df_many_path, index=False)

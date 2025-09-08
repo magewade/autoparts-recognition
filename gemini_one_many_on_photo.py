@@ -10,10 +10,13 @@ from pathlib import Path
 
 # Новый промпт для одновременного определения one/many и наличия наклейки с баркодом и брендом
 PHOTO_ONE_MANY_BARCODE_PROMPT = (
-    "If there is only one unique physical car part, output 'one'. "
-    "If there are few unique physical car details (more than one) visible, output 'many'. "
-    "If there is a visible sticker or label with both a barcode and a brand name, output 'True', otherwise output 'False'. "
-    "Output strictly in the format: one|True, one|False, many|True, or many|False. Do not explain your answer. If you don't know, output 'unknown|unknown'."
+    "You are analyzing a product photo. Your task is to determine ONLY the number of unique physical car parts (not numbers, not labels, not packaging, not text, not boxes, not backgrounds). "
+    "If there is exactly one unique physical car part visible (even if there are many numbers, labels, or packaging), output 'one'. "
+    "If there are two or more unique physical car parts visible, output 'many'. "
+    "Do NOT count numbers, labels, barcodes, packaging, boxes, or any text as separate parts. Only count actual, physical car parts. "
+    "If there is a visible sticker or label with BOTH a barcode and a brand name on the part, output 'True', otherwise output 'False'. "
+    "Output strictly in the format: one|True, one|False, many|True, or many|False. Do not explain your answer. If you don't know, output 'unknown|unknown'. "
+    "Goal: We are looking for a photo with exactly one physical car part and a visible barcode label."
 )
 
 
@@ -71,7 +74,7 @@ def process_images_one_many_and_barcode_label(
             }
         predictions.append(pred)
         token_stats.append(usage)
-        time.sleep(random.uniform(1.5, 3.5))
+        time.sleep(random.uniform(2.5, 5.5))
         if pred.lower().startswith("many"):
             break
     return predictions, token_stats
@@ -90,7 +93,7 @@ class GeminiPhotoOneManyBarcodeInference:
                 "temperature": 0,
                 "top_p": 1,
                 "top_k": 1,
-                "max_output_tokens": 5000,
+                "max_output_tokens": 10000,
             },
             safety_settings=[
                 {
