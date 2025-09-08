@@ -369,22 +369,29 @@ def run_full_pipeline(cli_args):
     # one: только актуальные строки
     one_path = "products_one.csv"
     many_path = "products_many.csv"
+    # Всегда выравниваем колонки по объединённому списку, отсутствующие заполняем None
+    all_cols = sorted(set(df_one.columns) | set(df_many.columns))
+    df_one = df_one.reindex(columns=all_cols)
+    df_many = df_many.reindex(columns=all_cols)
     df_one.to_csv(one_path, index=False)
-    # many: только новые many, выравниваем колонки с предыдущими many
     if os.path.exists(many_path):
-        df_many_prev = pd.read_csv(many_path)
-        all_cols = sorted(set(df_many_prev.columns) | set(df_many.columns))
+        try:
+            df_many_prev = pd.read_csv(many_path)
+        except Exception as e:
+            logging.error(f"Ошибка чтения {many_path}: {e}")
+            df_many_prev = pd.DataFrame(columns=all_cols)
         df_many_prev = df_many_prev.reindex(columns=all_cols)
         df_many = df_many.reindex(columns=all_cols)
-        # append only new many
+        # append only новые many
         df_many.to_csv(many_path, mode="a", header=False, index=False)
-        total_many = len(df_many_prev) + len(df_many)
+        df_many_actual = pd.concat([df_many_prev, df_many], ignore_index=True)
     else:
         df_many.to_csv(many_path, index=False)
-        total_many = len(df_many)
-    # Итоговое количество: many + one (по файлам)
-    df_many_actual = pd.read_csv(many_path)
-    df_one_actual = pd.read_csv(one_path)
+        df_many_actual = df_many.copy()
+
+    df_many_actual.to_csv(many_path, index=False)
+    df_one_actual = df_one.copy()
+    df_one_actual.to_csv(one_path, index=False)
     total_actual = len(df_many_actual) + len(df_one_actual)
     logging.info(f"[SPLIT desc] Добавлено в many: {len(df_many)}, в one: {len(df_one)}")
     logging.info(
