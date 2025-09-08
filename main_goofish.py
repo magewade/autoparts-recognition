@@ -437,7 +437,7 @@ def run_full_pipeline(cli_args):
         image_predictions.append(preds)
         image_usage_stats.append(usage)
         # Автосейв каждые 10 строк
-        if (idx + 1) % 10 == 0:
+        if (idx + 1) % 5 == 0:
             df_temp = df_one_desc.copy()
             df_temp["image_predictions"] = image_predictions + [""] * (
                 len(df_one_desc) - len(image_predictions)

@@ -1,34 +1,4 @@
 from dataclasses import asdict, is_dataclass
-
-
-# Универсальная функция для приведения usage к dict
-def usage_to_dict(usage):
-    if usage is None:
-        return {
-            "prompt_token_count": None,
-            "candidates_token_count": None,
-            "total_token_count": None,
-        }
-    if isinstance(usage, dict):
-        return usage
-    if is_dataclass(usage):
-        return asdict(usage)
-    if hasattr(usage, "__dict__"):
-        return vars(usage)
-    try:
-        return {
-            k: getattr(usage, k)
-            for k in dir(usage)
-            if not k.startswith("_") and not callable(getattr(usage, k))
-        }
-    except Exception:
-        return {
-            "prompt_token_count": None,
-            "candidates_token_count": None,
-            "total_token_count": None,
-        }
-
-
 import google.generativeai as genai
 from pathlib import Path
 import random
@@ -82,6 +52,34 @@ Output strictly in this format (always in English, always 3 fields, always separ
 
 If you don't know a value, write None. Do not output anything else except the required 3 fields in the specified format. Always answer in English.
 """
+
+
+# Универсальная функция для приведения usage к dict
+def usage_to_dict(usage):
+    if usage is None:
+        return {
+            "prompt_token_count": None,
+            "candidates_token_count": None,
+            "total_token_count": None,
+        }
+    if isinstance(usage, dict):
+        return usage
+    if is_dataclass(usage):
+        return asdict(usage)
+    if hasattr(usage, "__dict__"):
+        return vars(usage)
+    try:
+        return {
+            k: getattr(usage, k)
+            for k in dir(usage)
+            if not k.startswith("_") and not callable(getattr(usage, k))
+        }
+    except Exception:
+        return {
+            "prompt_token_count": None,
+            "candidates_token_count": None,
+            "total_token_count": None,
+        }
 
 
 class GeminiInference:
@@ -347,6 +345,24 @@ class GeminiInference:
             )
             if return_usage:
                 answer, usage = result
+                # usage должен быть dict с нужными полями
+                if not isinstance(usage, dict):
+                    try:
+                        from dataclasses import asdict
+
+                        usage = asdict(usage)
+                    except Exception:
+                        usage = (
+                            vars(usage) if hasattr(usage, "__dict__") else dict(usage)
+                        )
+                # fallback если usage невалиден
+                for k in [
+                    "prompt_token_count",
+                    "candidates_token_count",
+                    "total_token_count",
+                ]:
+                    if k not in usage:
+                        usage[k] = None
             else:
                 answer = result
             if answer.count("|") != 2:
@@ -364,7 +380,10 @@ class GeminiInference:
 
             if extracted_number.strip().lower() != "none | none | none":
                 self.reset_incorrect_predictions()
-                return (extracted_number, usage) if return_usage else extracted_number
+                if return_usage:
+                    return extracted_number, usage
+                else:
+                    return extracted_number
 
             if attempt < max_attempts - 1:
                 logging.info(
