@@ -74,7 +74,7 @@ def process_images_one_many_and_barcode_label(
             }
         predictions.append(pred)
         token_stats.append(usage)
-        time.sleep(random.uniform(2.5, 5.5))
+        time.sleep(random.uniform(10, 15))
         if pred.lower().startswith("many"):
             break
     return predictions, token_stats
