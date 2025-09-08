@@ -74,7 +74,7 @@ def process_images_one_many_and_barcode_label(
             }
         predictions.append(pred)
         token_stats.append(usage)
-        time.sleep(random.uniform(10, 15))
+        time.sleep(random.uniform(15, 20))
         if pred.lower().startswith("many"):
             break
     return predictions, token_stats
@@ -93,7 +93,7 @@ class GeminiPhotoOneManyBarcodeInference:
                 "temperature": 0,
                 "top_p": 1,
                 "top_k": 1,
-                "max_output_tokens": 10000,
+                "max_output_tokens": 6000,
             },
             safety_settings=[
                 {
