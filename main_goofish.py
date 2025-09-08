@@ -364,38 +364,19 @@ def run_full_pipeline(cli_args):
             return "one"
 
     mask_many = df_parsed["description_model_guess"].apply(get_one_many) == "many"
-    df_many = df_parsed[mask_many].copy()
-    df_one = df_parsed[~mask_many].copy()
-    # one: только актуальные строки
-    one_path = "products_one.csv"
-    many_path = "products_many.csv"
-    # Всегда выравниваем колонки по объединённому списку, отсутствующие заполняем None
-    all_cols = sorted(set(df_one.columns) | set(df_many.columns))
-    df_one = df_one.reindex(columns=all_cols)
-    df_many = df_many.reindex(columns=all_cols)
-    df_one.to_csv(one_path, index=False)
-    if os.path.exists(many_path):
-        try:
-            df_many_prev = pd.read_csv(many_path)
-        except Exception as e:
-            logging.error(f"Ошибка чтения {many_path}: {e}")
-            df_many_prev = pd.DataFrame(columns=all_cols)
-        df_many_prev = df_many_prev.reindex(columns=all_cols)
-        df_many = df_many.reindex(columns=all_cols)
-        # append only новые many
-        df_many.to_csv(many_path, mode="a", header=False, index=False)
-        df_many_actual = pd.concat([df_many_prev, df_many], ignore_index=True)
-    else:
-        df_many.to_csv(many_path, index=False)
-        df_many_actual = df_many.copy()
-
-    df_many_actual.to_csv(many_path, index=False)
-    df_one_actual = df_one.copy()
-    df_one_actual.to_csv(one_path, index=False)
-    total_actual = len(df_many_actual) + len(df_one_actual)
-    logging.info(f"[SPLIT desc] Добавлено в many: {len(df_many)}, в one: {len(df_one)}")
+    df_many_desc = df_parsed[mask_many].copy()
+    df_one_desc = df_parsed[~mask_many].copy()
+    all_cols = sorted(set(df_one_desc.columns) | set(df_many_desc.columns))
+    df_one_desc = df_one_desc.reindex(columns=all_cols)
+    df_many_desc = df_many_desc.reindex(columns=all_cols)
+    df_one_desc.to_csv("products_one_desc.csv", index=False)
+    df_many_desc.to_csv("products_many_desc.csv", index=False)
+    total_actual = len(df_many_desc) + len(df_one_desc)
     logging.info(
-        f"[SPLIT desc] Итоговое количество: many={len(df_many_actual)}, one={len(df_one_actual)}, всего={total_actual}"
+        f"[SPLIT desc] Добавлено в many: {len(df_many_desc)}, в one: {len(df_one_desc)}"
+    )
+    logging.info(
+        f"[SPLIT desc] Итоговое количество: many={len(df_many_desc)}, one={len(df_one_desc)}, всего={total_actual}"
     )
 
     # 5. Инференс по всем картинкам для one
@@ -403,7 +384,7 @@ def run_full_pipeline(cli_args):
 
     image_predictions = []
     image_usage_stats = []
-    for idx, row in df_one.iterrows():
+    for idx, row in df_one_desc.iterrows():
         images = row.get("images", "[]")
         try:
             images_list = (
@@ -455,8 +436,8 @@ def run_full_pipeline(cli_args):
             ]
         image_predictions.append(preds)
         image_usage_stats.append(usage)
-    df_one["image_predictions"] = image_predictions
-    df_one.to_csv("products_one_with_image_analysis.csv", index=False)
+    df_one_desc["image_predictions"] = image_predictions
+    df_one_desc.to_csv("products_one_image.csv", index=False)
     usage_rows = []
     for idx, usage_list in enumerate(image_usage_stats):
         for img_idx, usage in enumerate(usage_list):
@@ -470,54 +451,26 @@ def run_full_pipeline(cli_args):
     def has_many(preds):
         return any(str(p).lower().startswith("many") for p in preds)
 
-    mask_many_img = df_one["image_predictions"].apply(has_many)
-    df_many_img = df_one[mask_many_img].copy()
-    df_one_img = df_one[~mask_many_img].copy()
-    many_img_path = "products_many_by_image.csv"
-    one_img_path = "products_one_by_image.csv"
-    # one: только актуальные строки
-    df_one_img.to_csv(one_img_path, index=False)
-    # many: только новые many, выравниваем колонки с предыдущими many
-    if os.path.exists(many_img_path):
-        df_many_img_prev = pd.read_csv(many_img_path)
-        all_cols = sorted(set(df_many_img_prev.columns) | set(df_many_img.columns))
-        df_many_img_prev = df_many_img_prev.reindex(columns=all_cols)
-        df_many_img = df_many_img.reindex(columns=all_cols)
-        df_many_img.to_csv(many_img_path, mode="a", header=False, index=False)
-        total_many_img = len(df_many_img_prev) + len(df_many_img)
-    else:
-        df_many_img.to_csv(many_img_path, index=False)
-        total_many_img = len(df_many_img)
-    # append many к products_many.csv (кумулятивно)
-    df_many_path = "products_many.csv"
-    if os.path.exists(df_many_path):
-        df_many_total = pd.read_csv(df_many_path)
-        all_cols = sorted(set(df_many_total.columns) | set(df_many_img.columns))
-        df_many_total = df_many_total.reindex(columns=all_cols)
-        df_many_img = df_many_img.reindex(columns=all_cols)
-        df_many_img.to_csv(df_many_path, mode="a", header=False, index=False)
-        total_many_total = len(df_many_total) + len(df_many_img)
-    else:
-        df_many_img.to_csv(df_many_path, index=False)
-        total_many_total = len(df_many_img)
-    # Итоговое количество: many + one (по файлам)
-    df_many_img_actual = pd.read_csv(many_img_path)
-    df_one_img_actual = pd.read_csv(one_img_path)
-    total_img_actual = len(df_many_img_actual) + len(df_one_img_actual)
+    mask_many_img = df_one_desc["image_predictions"].apply(has_many)
+    df_many_image = df_one_desc[mask_many_img].copy()
+    df_one_image = df_one_desc[~mask_many_img].copy()
+    all_cols = sorted(set(df_one_image.columns) | set(df_many_image.columns))
+    df_one_image = df_one_image.reindex(columns=all_cols)
+    df_many_image = df_many_image.reindex(columns=all_cols)
+    df_one_image.to_csv("products_one_image.csv", index=False)
+    df_many_image.to_csv("products_many_image.csv", index=False)
+    total_img_actual = len(df_many_image) + len(df_one_image)
     logging.info(
-        f"[SPLIT image] Добавлено в many: {len(df_many_img)}, в one: {len(df_one_img)}"
+        f"[SPLIT image] Добавлено в many: {len(df_many_image)}, в one: {len(df_one_image)}"
     )
     logging.info(
-        f"[SPLIT image] Итоговое количество: many={len(df_many_img_actual)}, one={len(df_one_img_actual)}, всего={total_img_actual}"
-    )
-    logging.info(
-        f"[SPLIT image] Текущее количество в products_many.csv: {total_many_total}"
+        f"[SPLIT image] Итоговое количество: many={len(df_many_image)}, one={len(df_one_image)}, всего={total_img_actual}"
     )
 
     # 7. Инференс номера по чистому one
     from gemini_model import GeminiInference
 
-    df_one_img = pd.read_csv("products_one_by_image.csv")
+    df_one_img = pd.read_csv("products_one_image.csv")
     extracted_numbers = []
     barcode_image_links = []
     number_usage_rows = []
@@ -567,7 +520,7 @@ def run_full_pipeline(cli_args):
         number_usage_rows.append({"_pb": usage_str})
     df_one_img["barcode_image_link"] = barcode_image_links
     df_one_img["extracted_number_from_barcode_image"] = extracted_numbers
-    df_one_img.to_csv("products_one_by_image_with_number.csv", index=False)
+    df_one_img.to_csv("products_one_number.csv", index=False)
     # Сохраняем usage для номера
     pd.DataFrame(number_usage_rows).to_csv("products_number_usage.csv", index=False)
 
@@ -575,72 +528,49 @@ def run_full_pipeline(cli_args):
     def has_many_final(preds):
         return any(str(p).lower().startswith("many") for p in preds)
 
-    df_final = pd.read_csv("products_one_by_image_with_number.csv")
+    df_final = pd.read_csv("products_one_number.csv")
     preds_col = df_final["image_predictions"]
     if preds_col.apply(lambda x: isinstance(x, str)).all():
         preds_col = preds_col.apply(lambda x: ast.literal_eval(x) if x else [])
     mask_many_final = preds_col.apply(has_many_final)
-    df_many_final = df_final[mask_many_final].copy()
-    df_one_final = df_final[~mask_many_final].copy()
+    df_many_number = df_final[mask_many_final].copy()
+    df_one_number = df_final[~mask_many_final].copy()
+    all_cols = sorted(set(df_one_number.columns) | set(df_many_number.columns))
+    df_one_number = df_one_number.reindex(columns=all_cols)
+    df_many_number = df_many_number.reindex(columns=all_cols)
+    df_one_number.to_csv("products_one_number_final.csv", index=False)
+    df_many_number.to_csv("products_many_number.csv", index=False)
+    total_number_actual = len(df_many_number) + len(df_one_number)
+    logging.info(
+        f"[SPLIT number] Добавлено в many: {len(df_many_number)}, в one: {len(df_one_number)}"
+    )
+    logging.info(
+        f"[SPLIT number] Итоговое количество: many={len(df_many_number)}, one={len(df_one_number)}, всего={total_number_actual}"
+    )
 
-    # Собираем все many в один финальный файл
-    many_files = [
-        "products_many.csv",
-        "products_many_by_image.csv",
-    ]
-    many_dfs = []
-    for f in many_files:
-        if os.path.exists(f):
-            many_dfs.append(pd.read_csv(f))
-    if not df_many_final.empty:
-        many_dfs.append(df_many_final)
-
-    many_count = 0
-    if many_dfs:
-        # Привести к общему набору столбцов
-        all_cols = set()
-        for df in many_dfs:
-            all_cols.update(df.columns)
-        all_cols = sorted(all_cols)
-        many_dfs = [df.reindex(columns=all_cols) for df in many_dfs]
-        df_many_final_all = pd.concat(many_dfs, ignore_index=True)
-        df_many_final_all.to_csv("products_many_final.csv", index=False)
-        many_count = len(df_many_final_all)
-    else:
-        pd.DataFrame().to_csv("products_many_final.csv", index=False)
-
-    # Собираем все one в один финальный файл
-    one_files = [
-        "products_one_by_image_with_number.csv",
-    ]
-    one_dfs = []
-    for f in one_files:
-        if os.path.exists(f):
-            one_dfs.append(pd.read_csv(f))
-    if not df_one_final.empty:
-        one_dfs.append(df_one_final)
-
-    one_count = 0
-    if one_dfs:
-        all_cols = set()
-        for df in one_dfs:
-            all_cols.update(df.columns)
-        all_cols = sorted(all_cols)
-        one_dfs = [df.reindex(columns=all_cols) for df in one_dfs]
-        df_one_final_all = pd.concat(one_dfs, ignore_index=True)
-        df_one_final_all.to_csv("products_one_final.csv", index=False)
-        one_count = len(df_one_final_all)
-    else:
-        pd.DataFrame().to_csv("products_one_final.csv", index=False)
-
+    # Финальный сбор: просто копируем актуальные many/one после split по номеру
+    df_many_number = (
+        pd.read_csv("products_many_number.csv")
+        if os.path.exists("products_many_number.csv")
+        else pd.DataFrame()
+    )
+    df_one_number = (
+        pd.read_csv("products_one_number_final.csv")
+        if os.path.exists("products_one_number_final.csv")
+        else pd.DataFrame()
+    )
+    all_cols = sorted(set(df_many_number.columns) | set(df_one_number.columns))
+    df_many_number = df_many_number.reindex(columns=all_cols)
+    df_one_number = df_one_number.reindex(columns=all_cols)
+    df_many_number.to_csv("products_many_final.csv", index=False)
+    df_one_number.to_csv("products_one_final.csv", index=False)
+    many_count = len(df_many_number)
+    one_count = len(df_one_number)
     logging.info(
         f"[FINAL DATASETS] Созданы products_many_final.csv: {many_count} строк, products_one_final.csv: {one_count} строк"
     )
     logging.info(
-        f"[SPLIT final] Добавлено в many: {len(df_many_final)}, в one: {len(df_one_final)}"
-    )
-    logging.info(
-        f"[SPLIT final] Текущее количество: many={many_count}, one={one_count}, всего: {many_count + one_count}"
+        f"[SPLIT final] Итоговое количество: many={many_count}, one={one_count}, всего: {many_count + one_count}"
     )
 
     t_infer_end = time.time()
