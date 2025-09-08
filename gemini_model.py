@@ -323,7 +323,8 @@ class GeminiInference:
         self.configure_api()
 
         if image_path.startswith("http"):
-            response = requests.get(image_path, stream=True)
+            headers = {"User-Agent": "Mozilla/5.0 (compatible; autoparts-bot/1.0)"}
+            response = requests.get(image_path, stream=True, headers=headers)
             img_data = io.BytesIO(response.content)
         else:
             img = Path(image_path)

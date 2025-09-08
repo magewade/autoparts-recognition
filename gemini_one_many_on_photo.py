@@ -202,7 +202,8 @@ class GeminiPhotoOneManyBarcodeInference:
     def __call__(self, image_path, return_usage=False):
         self.configure_api()
         if image_path.startswith("http"):
-            response = requests.get(image_path, stream=True)
+            headers = {"User-Agent": "Mozilla/5.0 (compatible; autoparts-bot/1.0)"}
+            response = requests.get(image_path, stream=True, headers=headers)
             response.raise_for_status()
             img_data = io.BytesIO(response.content)
         else:

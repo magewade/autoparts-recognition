@@ -382,10 +382,13 @@ def run_full_pipeline(cli_args):
     else:
         df_many.to_csv(many_path, index=False)
         total_many = len(df_many)
-    total = total_many + len(df_one)
+    # Итоговое количество: many + one (по файлам)
+    df_many_actual = pd.read_csv(many_path)
+    df_one_actual = pd.read_csv(one_path)
+    total_actual = len(df_many_actual) + len(df_one_actual)
     logging.info(f"[SPLIT desc] Добавлено в many: {len(df_many)}, в one: {len(df_one)}")
     logging.info(
-        f"[SPLIT desc] Текущее количество: many={total_many}, one={len(df_one)}, всего={total}"
+        f"[SPLIT desc] Итоговое количество: many={len(df_many_actual)}, one={len(df_one_actual)}, всего={total_actual}"
     )
 
     # 5. Инференс по всем картинкам для one
@@ -490,12 +493,15 @@ def run_full_pipeline(cli_args):
     else:
         df_many_img.to_csv(df_many_path, index=False)
         total_many_total = len(df_many_img)
-    total_img = len(df_many_img) + len(df_one_img)
+    # Итоговое количество: many + one (по файлам)
+    df_many_img_actual = pd.read_csv(many_img_path)
+    df_one_img_actual = pd.read_csv(one_img_path)
+    total_img_actual = len(df_many_img_actual) + len(df_one_img_actual)
     logging.info(
         f"[SPLIT image] Добавлено в many: {len(df_many_img)}, в one: {len(df_one_img)}"
     )
     logging.info(
-        f"[SPLIT image] Текущее количество: many={total_many_img}, one={len(df_one_img)}, всего={total_img}"
+        f"[SPLIT image] Итоговое количество: many={len(df_many_img_actual)}, one={len(df_one_img_actual)}, всего={total_img_actual}"
     )
     logging.info(
         f"[SPLIT image] Текущее количество в products_many.csv: {total_many_total}"
