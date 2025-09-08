@@ -548,7 +548,7 @@ def run_full_pipeline(cli_args):
         f"[SPLIT number] Итоговое количество: many={len(df_many_number)}, one={len(df_one_number)}, всего={total_number_actual}"
     )
 
-    # Финальный сбор: просто копируем актуальные many/one после split по номеру
+    # Финальный сбор
     df_many_number = (
         pd.read_csv("products_many_number.csv")
         if os.path.exists("products_many_number.csv")

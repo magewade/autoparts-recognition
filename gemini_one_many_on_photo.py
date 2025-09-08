@@ -10,13 +10,14 @@ from pathlib import Path
 
 # Новый промпт для одновременного определения one/many и наличия наклейки с баркодом и брендом
 PHOTO_ONE_MANY_BARCODE_PROMPT = (
-    "You are analyzing a product photo. Your task is to determine ONLY the number of unique physical car parts (not numbers, not labels, not packaging, not text, not boxes, not backgrounds). "
-    "If there is exactly one unique physical car part visible (even if there are many numbers, labels, or packaging), output 'one'. "
-    "If there are two or more unique physical car parts visible, output 'many'. "
-    "Do NOT count numbers, labels, barcodes, packaging, boxes, or any text as separate parts. Only count actual, physical car parts. "
+    "You are analyzing a product photo. Your task is to determine ONLY the physical quantity of unique physical car items (not numbers, not labels, not packaging, not text, not boxes, not backgrounds). "
+    "If there is exactly one unique physical car item visible (even if there are many numbers or labels), output 'one'. "
+    "If there are two or more unique physical car items visible, output 'many'. "
+    "Do NOT count numbers, labels, barcodes, packaging, boxes, or any text as separate parts. Only count actual, physical car items. "
     "If there is a visible sticker or label with BOTH a barcode and a brand name on the part, output 'True', otherwise output 'False'. "
     "Output strictly in the format: one|True, one|False, many|True, or many|False. Do not explain your answer. If you don't know, output 'unknown|unknown'. "
     "Goal: We are looking for a photo with exactly one physical car part and a visible barcode label."
+    "Better to answer one, than many if you are not sure."
 )
 
 
@@ -56,7 +57,7 @@ def process_images_one_many_and_barcode_label(
     Для списка image_paths:
     - Для каждой картинки вызывает LLM с новым промптом.
     - Если хотя бы на одной many — прерывает обработку и возвращает накопленный список (до many включительно).
-    - Возвращает список строк вида one|True, many|False и т.д.
+    - Возвращает список строк вида one|True, one|False, many|True,many|False и т.д.
     """
     model = GeminiPhotoOneManyBarcodeInference(api_keys, model_name=model_name)
     predictions = []
