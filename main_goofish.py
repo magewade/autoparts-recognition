@@ -436,6 +436,28 @@ def run_full_pipeline(cli_args):
             ]
         image_predictions.append(preds)
         image_usage_stats.append(usage)
+        # Автосейв каждые 10 строк
+        if (idx + 1) % 10 == 0:
+            df_temp = df_one_desc.copy()
+            df_temp["image_predictions"] = image_predictions + [""] * (
+                len(df_one_desc) - len(image_predictions)
+            )
+            df_temp.to_csv("products_one_image_progress.csv", index=False)
+            usage_df = pd.DataFrame(
+                image_usage_stats
+                + [
+                    {
+                        "prompt_token_count": None,
+                        "candidates_token_count": None,
+                        "total_token_count": None,
+                    }
+                ]
+                * (len(df_one_desc) - len(image_usage_stats))
+            )
+            usage_df.to_csv("products_image_usage_progress.csv", index=False)
+            logging.info(
+                f"[LLM image] Промежуточные результаты записаны в products_one_image_progress.csv"
+            )
     df_one_desc["image_predictions"] = image_predictions
     df_one_desc.to_csv("products_one_image.csv", index=False)
     usage_rows = []

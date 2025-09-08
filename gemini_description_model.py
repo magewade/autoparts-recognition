@@ -111,7 +111,7 @@ class GeminiDescriptionInference:
             "If there are more than 5 part numbers, output only the first five, then write 'etc' after them. "
             "IMPORTANT - If you extract more than one unique part number, this is a clear sign that the last field should be 'many'. "
             "If the numbers field contains more than one number, you MUST set the last field to 'many', even if you are not sure. "
-            "Carefully read the text and, if there are any indirect signs that the seller is offering more than one physical item (e.g. words like 'set', 'kit', 'several', '2 pcs', 'for different models', 'multiple', etc.), set the last field to 'many'. "
+            "Carefully read the text and, if there are any indirect signs that the seller is offering more than one physical item (e.g. words like 'set', 'kit', 'several', '2 pcs', 'for different models', 'multiple', 'I sell the details for several brands'etc.), set the last field to 'many'. "
             "If you are not sure, set it to 'one'. "
             "If you cannot find a brand or number, write 'None'. "
             "Output strictly in this format: brand | numbers | one_or_many. "
