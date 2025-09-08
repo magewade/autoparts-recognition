@@ -333,6 +333,9 @@ def main():
 
 def run_full_pipeline(cli_args):
 
+    # === Засекаем время инференса ===
+    t_infer_start = time.time()
+
     # 1. Сбор product_links.csv (должен быть уже собран до запуска этого пайплайна)
     # 2. Парсинг товаров (описание, цена, картинки)
     #    -> parsed_products.csv
@@ -363,9 +366,26 @@ def run_full_pipeline(cli_args):
     mask_many = df_parsed["description_model_guess"].apply(get_one_many) == "many"
     df_many = df_parsed[mask_many].copy()
     df_one = df_parsed[~mask_many].copy()
-    logging.info(f"[SPLIT desc] Добавлено в many: {len(df_many)}; в one: {len(df_one)}")
-    df_many.to_csv("products_many.csv", index=False)
-    df_one.to_csv("products_one.csv", index=False)
+    # Подсчет totals до split
+    many_path = "products_many.csv"
+    one_path = "products_one.csv"
+    prev_many = 0
+    prev_one = 0
+    if os.path.exists(many_path):
+        try:
+            prev_many = len(pd.read_csv(many_path))
+        except Exception:
+            prev_many = 0
+    if os.path.exists(one_path):
+        try:
+            prev_one = len(pd.read_csv(one_path))
+        except Exception:
+            prev_one = 0
+    df_many.to_csv(many_path, index=False)
+    df_one.to_csv(one_path, index=False)
+    logging.info(
+        f"[SPLIT desc] Добавлено в many: {len(df_many)} (итого: {len(df_many)+prev_many}); в one: {len(df_one)} (итого: {len(df_one)+prev_one})"
+    )
 
     # 5. Инференс по всем картинкам для one
     from gemini_one_many_on_photo import process_images_one_many_and_barcode_label
@@ -443,8 +463,23 @@ def run_full_pipeline(cli_args):
     df_many_img = df_one[mask_many_img].copy()
     df_one_img = df_one[~mask_many_img].copy()
     # Логирование split после image analysis
+    # Подсчет totals до split
+    many_img_path = "products_many_by_image.csv"
+    one_img_path = "products_one_by_image.csv"
+    prev_many_img = 0
+    prev_one_img = 0
+    if os.path.exists(many_img_path):
+        try:
+            prev_many_img = len(pd.read_csv(many_img_path))
+        except Exception:
+            prev_many_img = 0
+    if os.path.exists(one_img_path):
+        try:
+            prev_one_img = len(pd.read_csv(one_img_path))
+        except Exception:
+            prev_one_img = 0
     logging.info(
-        f"[SPLIT image] Добавлено в many: {len(df_many_img)}; в one: {len(df_one_img)}"
+        f"[SPLIT image] Добавлено в many: {len(df_many_img)} (итого: {len(df_many_img)+prev_many_img}); в one: {len(df_one_img)} (итого: {len(df_one_img)+prev_one_img})"
     )
     # append many к products_many.csv
     df_many_path = "products_many.csv"
@@ -581,10 +616,27 @@ def run_full_pipeline(cli_args):
     )
 
     # Логирование split после финального отсела
+    # Подсчет totals до split
+    many_final_path = "products_many_final.csv"
+    one_final_path = "products_one_final.csv"
+    prev_many_final = 0
+    prev_one_final = 0
+    if os.path.exists(many_final_path):
+        try:
+            prev_many_final = len(pd.read_csv(many_final_path))
+        except Exception:
+            prev_many_final = 0
+    if os.path.exists(one_final_path):
+        try:
+            prev_one_final = len(pd.read_csv(one_final_path))
+        except Exception:
+            prev_one_final = 0
     logging.info(
-        f"[SPLIT final] Добавлено в many: {len(df_many_final)}; в one: {len(df_one_final)}"
+        f"[SPLIT final] Добавлено в many: {len(df_many_final)} (итого: {len(df_many_final)+prev_many_final}); в one: {len(df_one_final)} (итого: {len(df_one_final)+prev_one_final})"
     )
-    return None
+
+    t_infer_end = time.time()
+    return t_infer_end - t_infer_start
 
 
 if __name__ == "__main__":
