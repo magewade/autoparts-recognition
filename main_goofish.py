@@ -339,138 +339,194 @@ def run_full_pipeline(cli_args):
     # === Start inference timer ===
     t_infer_start = time.time()
 
-    # 1. Collect product_links.csv (should already be collected before running this pipeline)
-    # 2. Parse products (description, price, images)
-    #    -> parsed_products.csv
-    # 3. Inference on description (LLM)
-    parsed_csv = "parsed_products.csv"
-    parsed_with_model_csv = "parsed_products_with_model.csv"
-    api_keys = cli_args.api_keys
-    desc_model = cli_args.desc_model
-    api_keys_desc = (
-        cli_args.desc_api_keys if cli_args.desc_api_keys is not None else api_keys
-    )
-    parsed_with_model_csv = extract_model_from_description(
-        parsed_csv,
-        parsed_with_model_csv,
-        api_keys=api_keys_desc,
-        model_name=desc_model,
-    )
-
-    # 4. Split into one/many by description
-    df_parsed = pd.read_csv(parsed_with_model_csv)
-
-    def get_one_many(val):
+    # === RESUME LOGIC: check for each main file and continue from the correct step ===
+    # 1. Collect product_links.csv
+    if not os.path.exists("product_links.csv"):
+        processor = Processor(image_size=(512, 512), batch_size=32)
+        driver = processor.create_persistent_driver()
         try:
-            return str(val).split("|")[2].strip().lower()
-        except Exception:
-            return "one"
+            links = processor.collect_product_links_selenium(
+                driver,
+                max_steps=cli_args.max_steps,
+                max_links=cli_args.max_links,
+            )
+            if len(links) > cli_args.max_links:
+                links = links[: cli_args.max_links]
+            processor.save_product_links_to_csv(links, filename="product_links.csv")
+        finally:
+            processor.close_persistent_driver(driver)
+        logging.info("product_links.csv has been created")
+    else:
+        logging.info("product_links.csv found, skipping link collection")
 
-    mask_many = df_parsed["description_model_guess"].apply(get_one_many) == "many"
-    df_many_desc = df_parsed[mask_many].copy()
-    df_one_desc = df_parsed[~mask_many].copy()
-    all_cols = sorted(set(df_one_desc.columns) | set(df_many_desc.columns))
-    df_one_desc = df_one_desc.reindex(columns=all_cols)
-    df_many_desc = df_many_desc.reindex(columns=all_cols)
-    df_one_desc.to_csv("products_one_desc.csv", index=False)
-    df_many_desc.to_csv("products_many_desc.csv", index=False)
-    total_actual = len(df_many_desc) + len(df_one_desc)
-    logging.info(
-        f"[SPLIT desc] Added to many: {len(df_many_desc)}, to one: {len(df_one_desc)}"
-    )
-    logging.info(
-        f"[SPLIT desc] Final count: many={len(df_many_desc)}, one={len(df_one_desc)}, total={total_actual}"
-    )
+    # 2. Parse products (description, price, images) -> parsed_products.csv
+    if not os.path.exists("parsed_products.csv"):
+        df_links = pd.read_csv("product_links.csv")
+        if "href" in df_links.columns:
+            df_for_parse = pd.DataFrame({"href": df_links["href"]})
+        elif "url" in df_links.columns:
+            df_for_parse = pd.DataFrame({"href": df_links["url"]})
+        else:
+            raise Exception("No href/url column in product_links.csv")
+        parser = GoofishParserPlaywrightAsync()
+        import asyncio
 
-    # 5. Инференс по всем картинкам для one
+        df_result = asyncio.run(
+            enrich_dataframe_playwright_async(
+                df_for_parse, parser, output_path="parsed_products.csv", chunk_size=10
+            )
+        )
+        logging.info("parsed_products.csv has been created")
+    else:
+        logging.info("parsed_products.csv found, skipping parsing")
+
+    # 3. Inference on description (LLM) -> parsed_products_with_model.csv
+    if not os.path.exists("parsed_products_with_model.csv"):
+        api_keys = cli_args.api_keys
+        desc_model = cli_args.desc_model
+        api_keys_desc = (
+            cli_args.desc_api_keys if cli_args.desc_api_keys is not None else api_keys
+        )
+        extract_model_from_description(
+            "parsed_products.csv",
+            "parsed_products_with_model.csv",
+            api_keys=api_keys_desc,
+            model_name=desc_model,
+        )
+        logging.info("parsed_products_with_model.csv has been created")
+    else:
+        logging.info(
+            "parsed_products_with_model.csv found, skipping description inference"
+        )
+
+    # 4. Split into one/many by description -> products_one_desc.csv, products_many_desc.csv
+    if not os.path.exists("products_one_desc.csv") or not os.path.exists(
+        "products_many_desc.csv"
+    ):
+        df_parsed = pd.read_csv("parsed_products_with_model.csv")
+
+        def get_one_many(val):
+            try:
+                return str(val).split("|")[2].strip().lower()
+            except Exception:
+                return "one"
+
+        mask_many = df_parsed["description_model_guess"].apply(get_one_many) == "many"
+        df_many_desc = df_parsed[mask_many].copy()
+        df_one_desc = df_parsed[~mask_many].copy()
+        all_cols = sorted(set(df_one_desc.columns) | set(df_many_desc.columns))
+        df_one_desc = df_one_desc.reindex(columns=all_cols)
+        df_many_desc = df_many_desc.reindex(columns=all_cols)
+        df_one_desc.to_csv("products_one_desc.csv", index=False)
+        df_many_desc.to_csv("products_many_desc.csv", index=False)
+        total_actual = len(df_many_desc) + len(df_one_desc)
+        logging.info(
+            f"[SPLIT desc] Added to many: {len(df_many_desc)}, to one: {len(df_one_desc)}"
+        )
+        logging.info(
+            f"[SPLIT desc] Final count: many={len(df_many_desc)}, one={len(df_one_desc)}, total={total_actual}"
+        )
+    else:
+        logging.info(
+            "products_one_desc.csv and products_many_desc.csv found, skipping split"
+        )
+
+    # 5. Инференс по всем картинкам для one -> products_one_image.csv
     from gemini_one_many_on_photo import process_images_one_many_and_barcode_label
 
-    image_predictions = []
-    image_usage_stats = []
-    for idx, row in df_one_desc.iterrows():
-        images = row.get("images", "[]")
-        try:
-            images_list = (
-                ast.literal_eval(images) if isinstance(images, str) else images
-            )
-        except Exception:
-            logging.warning(
-                f"[Image analysis] Не удалось обработать images для строки {idx}, images: {images}"
-            )
-            # Try to take the first image if there is a field 'image' or 'image_url'
-            first_image = row.get("image") or row.get("image_url")
-            if first_image:
-                images_list = [first_image]
-            else:
-                images_list = []
-        if images_list:
-            preds = []
-            usage = []
-            for img_idx, img_url in enumerate(images_list):
-                logging.info(
-                    f"[Photo LLM] Проверяем строку {idx}, картинка {img_idx}: {img_url}"
+    if not os.path.exists("products_one_image.csv"):
+        df_one_desc = pd.read_csv("products_one_desc.csv")
+        image_predictions = []
+        image_usage_stats = []
+        for idx, row in df_one_desc.iterrows():
+            images = row.get("images", "[]")
+            try:
+                images_list = (
+                    ast.literal_eval(images) if isinstance(images, str) else images
                 )
-                try:
-                    pred, usage_item = process_images_one_many_and_barcode_label(
-                        [img_url], api_keys, model_name=cli_args.one_many_model
+            except Exception:
+                logging.warning(
+                    f"[Image analysis] Не удалось обработать images для строки {idx}, images: {images}"
+                )
+                first_image = row.get("image") or row.get("image_url")
+                if first_image:
+                    images_list = [first_image]
+                else:
+                    images_list = []
+            if images_list:
+                preds = []
+                usage = []
+                for img_idx, img_url in enumerate(images_list):
+                    logging.info(
+                        f"[Photo LLM] Проверяем строку {idx}, картинка {img_idx}: {img_url}"
                     )
-                    preds.extend(pred)
-                    usage.extend(usage_item)
-                    if pred and str(pred[0]).lower().startswith("many"):
-                        break
-                except Exception as e:
-                    logging.warning(f"[Photo LLM] Ошибка при обработке {img_url}: {e}")
-                    preds.append("unknown|unknown")
-                    usage.append(
-                        {
-                            "prompt_token_count": None,
-                            "candidates_token_count": None,
-                            "total_token_count": None,
-                        }
-                    )
-        else:
-            preds = ["unknown|unknown"]
-            usage = [
-                {
-                    "prompt_token_count": None,
-                    "candidates_token_count": None,
-                    "total_token_count": None,
-                }
-            ]
-        image_predictions.append(preds)
-        image_usage_stats.append(usage)
-        # Autosave every 10 rows
-        if (idx + 1) % 5 == 0:
-            df_temp = df_one_desc.copy()
-            df_temp["image_predictions"] = image_predictions + [""] * (
-                len(df_one_desc) - len(image_predictions)
-            )
-            df_temp.to_csv("products_one_image_progress.csv", index=False)
-            usage_df = pd.DataFrame(
-                image_usage_stats
-                + [
+                    try:
+                        pred, usage_item = process_images_one_many_and_barcode_label(
+                            [img_url],
+                            cli_args.api_keys,
+                            model_name=cli_args.one_many_model,
+                        )
+                        preds.extend(pred)
+                        usage.extend(usage_item)
+                        if pred and str(pred[0]).lower().startswith("many"):
+                            break
+                    except Exception as e:
+                        logging.warning(
+                            f"[Photo LLM] Ошибка при обработке {img_url}: {e}"
+                        )
+                        preds.append("unknown|unknown")
+                        usage.append(
+                            {
+                                "prompt_token_count": None,
+                                "candidates_token_count": None,
+                                "total_token_count": None,
+                            }
+                        )
+            else:
+                preds = ["unknown|unknown"]
+                usage = [
                     {
                         "prompt_token_count": None,
                         "candidates_token_count": None,
                         "total_token_count": None,
                     }
                 ]
-                * (len(df_one_desc) - len(image_usage_stats))
-            )
-            usage_df.to_csv("products_image_usage_progress.csv", index=False)
-            logging.info(
-                f"[LLM image] Intermediate results saved to products_one_image_progress.csv"
-            )
-    df_one_desc["image_predictions"] = image_predictions
-    df_one_desc.to_csv("products_one_image.csv", index=False)
-    usage_rows = []
-    for idx, usage_list in enumerate(image_usage_stats):
-        for img_idx, usage in enumerate(usage_list):
-            row = {"row": idx, "image_idx": img_idx}
-            row.update(usage)
-            usage_rows.append(row)
-    usage_df = pd.DataFrame(usage_rows)
-    usage_df.to_csv("products_image_usage.csv", index=False)
+            image_predictions.append(preds)
+            image_usage_stats.append(usage)
+            if (idx + 1) % 5 == 0:
+                df_temp = df_one_desc.copy()
+                df_temp["image_predictions"] = image_predictions + [""] * (
+                    len(df_one_desc) - len(image_predictions)
+                )
+                df_temp.to_csv("products_one_image_progress.csv", index=False)
+                usage_df = pd.DataFrame(
+                    image_usage_stats
+                    + [
+                        {
+                            "prompt_token_count": None,
+                            "candidates_token_count": None,
+                            "total_token_count": None,
+                        }
+                    ]
+                    * (len(df_one_desc) - len(image_usage_stats))
+                )
+                usage_df.to_csv("products_image_usage_progress.csv", index=False)
+                logging.info(
+                    f"[LLM image] Intermediate results saved to products_one_image_progress.csv"
+                )
+        df_one_desc["image_predictions"] = image_predictions
+        df_one_desc.to_csv("products_one_image.csv", index=False)
+        usage_rows = []
+        for idx, usage_list in enumerate(image_usage_stats):
+            for img_idx, usage in enumerate(usage_list):
+                row = {"row": idx, "image_idx": img_idx}
+                row.update(usage)
+                usage_rows.append(row)
+        usage_df = pd.DataFrame(usage_rows)
+        usage_df.to_csv("products_image_usage.csv", index=False)
+        logging.info("products_one_image.csv has been created")
+    else:
+        logging.info("products_one_image.csv found, skipping image inference")
 
     # 6. Filter many/one by images, add many to products_many.csv
     def has_many(preds):
