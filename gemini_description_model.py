@@ -80,6 +80,7 @@ class GeminiDescriptionInference:
         self.api_keys = api_keys
         self.current_key_index = 0
         self.model_name = model_name
+        self.last_successful_key_index = 0
         self.configure_api()
         self.model = genai.GenerativeModel(
             model_name=model_name,
@@ -150,8 +151,7 @@ class GeminiDescriptionInference:
         prompt = DESCRIPTION_MODEL_PROMPT + f"Description: {desc}"
         num_keys = len(self.api_keys)
         max_retries = 5
-        if not hasattr(self, "last_successful_key_index"):
-            self.last_successful_key_index = 0
+        # last_successful_key_index is now initialized in __init__
         for offset in range(num_keys):
             key_attempt = (self.last_successful_key_index + offset) % num_keys
             self.current_key_index = key_attempt

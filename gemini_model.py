@@ -99,6 +99,7 @@ class GeminiInference:
 
         self.api_keys = api_keys
         self.current_key_index = 0
+        self.last_successful_key_index = 0
         prompt_filled = DEFAULT_PROMPT.format(
             car_brand=car_brand if car_brand is not None else "None"
         )
@@ -340,8 +341,7 @@ class GeminiInference:
         self.message_history = []
 
     def __call__(self, image_path, return_usage=False):
-        if not hasattr(self, "last_successful_key_index"):
-            self.last_successful_key_index = 0
+        # last_successful_key_index is now initialized in __init__
 
         if image_path.startswith("http"):
             headers = {"User-Agent": "Mozilla/5.0 (compatible; autoparts-bot/1.0)"}
