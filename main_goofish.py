@@ -84,7 +84,7 @@ def extract_model_from_description(
                 len(df) - len(guesses)
             )
             df_temp.to_csv(output_csv, index=False)
-            # Сохраняем usage
+            # Save usage
             usage_df = pd.DataFrame(
                 usage_stats
                 + [
@@ -298,7 +298,7 @@ def main():
             parser = GoofishParserPlaywrightAsync()
             import asyncio
 
-            # Парсим только недостающие строки
+            # Parse only missing rows
             t1 = time.time()
             df_for_parse = df_for_parse.iloc[n_parsed:]
             df_result = asyncio.run(
@@ -547,7 +547,7 @@ def run_full_pipeline(cli_args):
     df_one_img["barcode_image_link"] = barcode_image_links
     df_one_img["extracted_number_from_barcode_image"] = extracted_numbers
     df_one_img.to_csv("products_one_number.csv", index=False)
-    # Сохраняем usage для номера
+    # Save usage for number
     pd.DataFrame(number_usage_rows).to_csv("products_number_usage.csv", index=False)
 
     # 8. Final filtering of many/one by number inference results
