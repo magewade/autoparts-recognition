@@ -97,6 +97,7 @@ class GeminiPhotoOneManyBarcodeInference:
         self.api_keys = api_keys
         self.current_key_index = 0
         self.model_name = model_name
+        self.last_successful_key_index = 0
         self.configure_api()
         self.model = genai.GenerativeModel(
             model_name=model_name,
@@ -245,8 +246,7 @@ class GeminiPhotoOneManyBarcodeInference:
         Always starts with the last successful key.
         """
         num_keys = len(self.api_keys)
-        if not hasattr(self, "last_successful_key_index"):
-            self.last_successful_key_index = 0
+        # last_successful_key_index is now initialized in __init__
 
         if image_path.startswith("http"):
             headers = {"User-Agent": "Mozilla/5.0 (compatible; autoparts-bot/1.0)"}
