@@ -432,12 +432,15 @@ def run_full_pipeline(cli_args):
         )
 
     # 5. Инференс по всем картинкам для one -> products_one_image.csv
-    from gemini_one_many_on_photo import process_images_one_many_and_barcode_label
+    from gemini_one_many_on_photo import GeminiPhotoOneManyBarcodeInference
 
     if not os.path.exists("products_one_image.csv"):
         df_one_desc = pd.read_csv("products_one_desc.csv")
         image_predictions = []
         image_usage_stats = []
+        photo_inference = GeminiPhotoOneManyBarcodeInference(
+            cli_args.api_keys, model_name=cli_args.one_many_model
+        )
         for idx, row in df_one_desc.iterrows():
             images = row.get("images", "[]")
             try:
@@ -461,14 +464,10 @@ def run_full_pipeline(cli_args):
                         f"[Photo LLM] Проверяем строку {idx}, картинка {img_idx}: {img_url}"
                     )
                     try:
-                        pred, usage_item = process_images_one_many_and_barcode_label(
-                            [img_url],
-                            cli_args.api_keys,
-                            model_name=cli_args.one_many_model,
-                        )
-                        preds.extend(pred)
-                        usage.extend(usage_item)
-                        if pred and str(pred[0]).lower().startswith("many"):
+                        pred, usage_item = photo_inference(img_url, return_usage=True)
+                        preds.append(pred)
+                        usage.append(usage_item)
+                        if pred and str(pred).lower().startswith("many"):
                             break
                     except Exception as e:
                         logging.warning(
@@ -555,6 +554,10 @@ def run_full_pipeline(cli_args):
     extracted_numbers = []
     barcode_image_links = []
     number_usage_rows = []
+    gemini = GeminiInference(
+        api_keys=cli_args.api_keys,
+        model_name=cli_args.gemini_api_model,
+    )
     for idx, row in df_one_img.iterrows():
         images = row.get("images", "[]")
         try:
@@ -578,11 +581,6 @@ def run_full_pipeline(cli_args):
         usage_str = "prompt_token_count: None candidates_token_count: None total_token_count: None"
         if found_link:
             try:
-                gemini = GeminiInference(
-                    api_keys=cli_args.api_keys,
-                    model_name=cli_args.gemini_api_model,
-                    car_brand=row.get("description_model_guess", None),
-                )
                 number, usage = (
                     gemini(found_link, return_usage=True)
                     if hasattr(gemini, "__call__")
