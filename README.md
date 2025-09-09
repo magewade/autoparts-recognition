@@ -51,6 +51,32 @@ If a value is unknown, the model outputs `nan`. No extra text, tags, or formatti
 ---
 
 
+
+## Token Usage Summary (NEW)
+
+At the end of the pipeline, the system automatically prints a summary table of total token usage for each main stage:
+
+* **Description** — LLM calls for extracting brand and numbers from product descriptions
+* **Images** — LLM calls for analyzing product images (one/many, barcode, etc.)
+* **Numbers** — LLM calls for extracting/validating part numbers from images
+
+**Example output:**
+
+```
+==== TOKEN USAGE SUMMARY ====
+			Total token count sum
+Description                12345
+Images                     67890
+Numbers                    23456
+============================
+```
+
+If a stage's usage file is missing or malformed, the table will show None and an error comment for that stage.
+
+This summary helps you track and analyze LLM token consumption for each pipeline step.
+
+---
+
 ## Pipeline Robustness & Resumption
 
 The system is designed to be robust against interruptions and failures:

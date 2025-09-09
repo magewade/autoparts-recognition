@@ -11,7 +11,6 @@ import re
 import io
 from pathlib import Path
 
-
 from config import Config
 from gemini_model import GeminiInference
 from dataprocessor_goofish import (
@@ -41,11 +40,11 @@ def extract_model_from_description(
     if os.path.exists(output_csv):
         df_out = pd.read_csv(output_csv)
         if "description_model_guess" in df_out.columns and len(df_out) == len(df):
-            logging.info(f"{output_csv} найден, пропускаем LLM по описанию")
+            logging.info(f"{output_csv} found, skipping LLM for description")
             return output_csv
 
     llm = GeminiDescriptionInference(api_keys=api_keys, model_name=model_name)
-    logging.info(f"[LLM desc] Используемая модель: {model_name}")
+    logging.info(f"[LLM desc] Using model: {model_name}")
     guesses = []
     usage_stats = []
     for i, row in df.iterrows():
@@ -98,13 +97,13 @@ def extract_model_from_description(
                 * (len(df) - len(usage_stats))
             )
             usage_df.to_csv("products_description_usage.csv", index=False)
-            logging.info(f"[LLM desc] Промежуточные результаты записаны в {output_csv}")
+            logging.info(f"[LLM desc] Intermediate results saved to {output_csv}")
         time.sleep(1.5)
     df["description_model_guess"] = guesses
     df.to_csv(output_csv, index=False)
     usage_df = pd.DataFrame(usage_stats)
     usage_df.to_csv("products_description_usage.csv", index=False)
-    logging.info(f"[LLM desc] Финальные результаты сохранены в {output_csv}")
+    logging.info(f"[LLM desc] Final results saved to {output_csv}")
     return output_csv
 
 
@@ -141,7 +140,7 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
         predicted_images = df_result.get("predicted_image", [""] * len(df)).tolist()
         confidences = df_result.get("confidence", [""] * len(df)).tolist()
         llm_predictions = df_result.get("llm_prediction", [""] * len(df)).tolist()
-        logging.info(f"Продолжаем инференс с {sum(processed_mask)} обработанных строк")
+        logging.info(f"Continuing inference from {sum(processed_mask)} processed rows")
     else:
         predicted_images = [""] * len(df)
         confidences = [""] * len(df)
@@ -201,16 +200,14 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
                 temp_df["confidence"] = confidences
                 temp_df["llm_prediction"] = llm_predictions
                 temp_df.to_csv(result_path, index=False)
-                logging.info(
-                    f"[Inference] Промежуточные результаты сохранены в {result_path}"
-                )
+                logging.info(f"[Inference] Intermediate results saved to {result_path}")
         # Финальный результат, если не делится на chunk_size
         temp_df = df.copy()
         temp_df["predicted_image"] = predicted_images
         temp_df["confidence"] = confidences
         temp_df["llm_prediction"] = llm_predictions
         temp_df.to_csv(result_path, index=False)
-    logging.info(f"[Inference] Финальные результаты сохранены в {result_path}")
+    logging.info(f"[Inference] Final results saved to {result_path}")
 
 
 def parse_args():
@@ -244,7 +241,7 @@ def main():
 
     logging.info = custom_logging_info
 
-    # 1. Сбор product_links.csv (если нет или не хватает ссылок)
+    # 1. Collect product_links.csv (if not present or not enough links)
     need_collect_links = True
     if os.path.exists("product_links.csv"):
         df_links_check = pd.read_csv("product_links.csv")
@@ -265,16 +262,16 @@ def main():
             processor.save_product_links_to_csv(links, filename="product_links.csv")
         finally:
             processor.close_persistent_driver(driver)
-        logging.info("product_links.csv сформирован")
+        logging.info("product_links.csv has been created")
         times["collect_links"] = time.time() - t0
-        logging.info(f"Время сбора ссылок: {times['collect_links']:.2f} сек")
+        logging.info(f"Link collection time: {times['collect_links']:.2f} sec")
     else:
         logging.info(
-            "product_links.csv найден и содержит достаточно ссылок, пропускаем сбор ссылок"
+            "product_links.csv found and contains enough links, skipping link collection"
         )
         times["collect_links"] = None
 
-    # 2. Сбор parsed_products.csv (если нет или не все ссылки обработаны)
+    # 2. Collect parsed_products.csv (if not present or not all links processed)
     t1 = time.time()
     df_links = pd.read_csv("product_links.csv")
     n_links = len(df_links)
@@ -285,12 +282,12 @@ def main():
         if n_parsed >= n_links:
             need_parse = False
             logging.info(
-                "parsed_products.csv найден и все ссылки обработаны, пропускаем парсинг Playwright"
+                "parsed_products.csv found and all links are processed, skipping Playwright parsing"
             )
             times["parsing"] = None
         else:
             logging.info(
-                f"parsed_products.csv найден, обработано {n_parsed} из {n_links}"
+                f"parsed_products.csv found, {n_parsed} out of {n_links} processed"
             )
             if "href" in df_links.columns:
                 df_for_parse = pd.DataFrame({"href": df_links["href"]})
@@ -313,7 +310,7 @@ def main():
                 )
             )
             times["parsing"] = time.time() - t1
-            logging.info("parsed_products.csv дополнен оставшимися строками")
+            logging.info("parsed_products.csv has been updated with remaining rows")
     if need_parse:
         if "href" in df_links.columns:
             df_for_parse = pd.DataFrame({"href": df_links["href"]})
@@ -331,7 +328,7 @@ def main():
             )
         )
         times["parsing"] = time.time() - t1
-        logging.info("parsed_products.csv сформирован")
+    logging.info("parsed_products.csv has been created")
     # Восстанавливаем logging.info
     logging.info = orig_logging_info
     return runtime_logs, times
@@ -379,10 +376,10 @@ def run_full_pipeline(cli_args):
     df_many_desc.to_csv("products_many_desc.csv", index=False)
     total_actual = len(df_many_desc) + len(df_one_desc)
     logging.info(
-        f"[SPLIT desc] Добавлено в many: {len(df_many_desc)}, в one: {len(df_one_desc)}"
+        f"[SPLIT desc] Added to many: {len(df_many_desc)}, to one: {len(df_one_desc)}"
     )
     logging.info(
-        f"[SPLIT desc] Итоговое количество: many={len(df_many_desc)}, one={len(df_one_desc)}, всего={total_actual}"
+        f"[SPLIT desc] Final count: many={len(df_many_desc)}, one={len(df_one_desc)}, total={total_actual}"
     )
 
     # 5. Инференс по всем картинкам для one
@@ -489,10 +486,10 @@ def run_full_pipeline(cli_args):
     df_many_image.to_csv("products_many_image.csv", index=False)
     total_img_actual = len(df_many_image) + len(df_one_image)
     logging.info(
-        f"[SPLIT image] Добавлено в many: {len(df_many_image)}, в one: {len(df_one_image)}"
+        f"[SPLIT image] Added to many: {len(df_many_image)}, to one: {len(df_one_image)}"
     )
     logging.info(
-        f"[SPLIT image] Итоговое количество: many={len(df_many_image)}, one={len(df_one_image)}, всего={total_img_actual}"
+        f"[SPLIT image] Final count: many={len(df_many_image)}, one={len(df_one_image)}, total={total_img_actual}"
     )
 
     # 7. Инференс номера по чистому one
@@ -571,10 +568,10 @@ def run_full_pipeline(cli_args):
     df_many_number.to_csv("products_many_number.csv", index=False)
     total_number_actual = len(df_many_number) + len(df_one_number)
     logging.info(
-        f"[SPLIT number] Добавлено в many: {len(df_many_number)}, в one: {len(df_one_number)}"
+        f"[SPLIT number] Added to many: {len(df_many_number)}, to one: {len(df_one_number)}"
     )
     logging.info(
-        f"[SPLIT number] Итоговое количество: many={len(df_many_number)}, one={len(df_one_number)}, всего={total_number_actual}"
+        f"[SPLIT number] Final count: many={len(df_many_number)}, one={len(df_one_number)}, total={total_number_actual}"
     )
 
     # Финальный сбор
@@ -596,10 +593,10 @@ def run_full_pipeline(cli_args):
     many_count = len(df_many_number)
     one_count = len(df_one_number)
     logging.info(
-        f"[FINAL DATASETS] Созданы products_many_final.csv: {many_count} строк, products_one_final.csv: {one_count} строк"
+        f"[FINAL DATASETS] Created products_many_final.csv: {many_count} rows, products_one_final.csv: {one_count} rows"
     )
     logging.info(
-        f"[SPLIT final] Итоговое количество: many={many_count}, one={one_count}, всего: {many_count + one_count}"
+        f"[SPLIT final] Final count: many={many_count}, one={one_count}, total={many_count + one_count}"
     )
 
     t_infer_end = time.time()
@@ -657,7 +654,7 @@ if __name__ == "__main__":
 
     # Финальная сводка по времени
     def fmt_time(val):
-        return f"{val/60:.2f} мин" if val is not None else "пропущен"
+        return f"{val/60:.2f} min" if val is not None else "skipped"
 
     total_time = 0.0
     for v in [
@@ -676,12 +673,12 @@ if __name__ == "__main__":
     for log in runtime_logs:
         logging.info(log)
     logging.info(
-        "\n==== ВРЕМЯ ЭТАПОВ ===="
-        f"\nСбор ссылок: {fmt_time(times['collect_links'])}"
-        f"\nПарсинг: {fmt_time(times['parsing'])}"
-        f"\nИнференс: {fmt_time(times['inference'])}"
+        "\n==== STAGE TIMES ===="
+        f"\nLink collection: {fmt_time(times['collect_links'])}"
+        f"\nParsing: {fmt_time(times['parsing'])}"
+        f"\nInference: {fmt_time(times['inference'])}"
         f"\n----------------------"
-        f"\nВсего: {total_time/60:.2f} мин"
+        f"\nTotal: {total_time/60:.2f} min"
         f"\n====================="
     )
 

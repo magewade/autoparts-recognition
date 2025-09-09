@@ -17,36 +17,40 @@ logging.basicConfig(
 )
 
 DEFAULT_PROMPT = """
-You are an expert at extracting automotive part/model numbers from images. You are given the following information from a previous analysis of the product description:
+You are an expert at extracting automotive part/model numbers from images. You are given the following from a previous description analysis:
 
 [Description LLM output]
-Brand | Numebers | One_or_many: {car_brand}
+Brand | Numbers | One_or_many: {car_brand}
 
-Your task:
-1. Use all information above to help you analyze the image. If any field is missing or 'None', try to fill it using the image.
-2. If a brand is given, use it to help identify relevant numbers or text in the image. If not, try to infer the brand/model from the image.
-3. Your main goal is to extract the main serial (OEM) part number or model number for each physical object visible in the image. This number is unique for each part, usually 9-15 characters, contains both letters and digits, and is not a date, batch, or random short code. 
-4. Always try to select the number that most closely matches the typical format of a model or OEM part number (for example, a mix of letters and digits, often with dashes or spaces, and not just a short code or serial/batch).
-5. The OEM/serial/model number is most often located directly above or near the barcode, and usually just below the logo or brand name of the manufacturer. It is often printed in a larger or bolder font. 
-6. Do NOT select numbers that are printed far from the brand or barcode, or that look like internal codes, batch numbers, or serials. Do NOT select numbers that are at the very bottom of the label or packaging unless they clearly match the OEM/model format and are near the brand/barcode. 
-7. If there are several numbers, always prefer the one that is closest to the brand name/logo and barcode, and that matches the typical OEM/model number format. 
-8. Ignore any numbers that are not plausible serial/OEM/model part numbers.
-9. If the brand is Bosch, in addition to extracting the Bosch part number, try to infer or guess for which car brand this part might be intended, based on any visible information (text, numbers, context) in the image. If you can guess the car brand, mention it in parentheses immediately after the brand in the first field (e.g. Bosch (for Geely) | 0 280 155 968 | one). Do not specify the exact model, engine, or modification — only the general car brand.
-10. For some brands (for example, Nissan), the OEM/model number may be written in two lines with different font sizes, often to the left of the word 'Nissan'. In such cases, combine both lines to form the full part number. If there is only one physical part, there should be only one part number in your answer.
+Instructions:
+- Use all info above to help analyze the image. If a field is missing or 'None', try to fill it from the image.
+- Prefer numbers from the description if they match the typical format for the detected brand (see table below), even if the image is unclear or ambiguous.
+- If the image and description disagree, but the description matches the brand's format, trust the description.
+- Use the table below to validate and extract the most likely OEM number. If both description and image provide numbers, but only the description matches the format, use the description.
+- The main OEM/model number is usually 9-15 characters, contains both letters and digits, and is not a date, batch, or short code. It is often near the barcode and brand logo, in a larger or bolder font.
+- Ignore numbers that are clearly dates, batches, or do not match the brand's typical format.
+- If there are several numbers, prefer the one closest to the brand/logo/barcode and matching the format.
+- If the brand is Bosch, also try to guess for which car brand this part is intended (e.g. Bosch (for Geely)).
+- If there is only one physical object in the image, output its main OEM/model number and set the last field to 'one'. If there are multiple objects, output all numbers (comma-separated) and set the last field to 'many'.
+- If unsure, default to 'one'.
 
-8. If there is only one physical object (part) in the image, output its main serial/OEM part number in the second field, and set the last field to 'one'.
-9. If there are clearly multiple separate physical objects (for example, several identical or different parts, or a set/kit of parts), output the main serial/OEM part number for each object (comma-separated), and set the last field to 'many'.
-10. Do NOT set 'many' just because you see several numbers on one part. Only set 'many' if there are multiple distinct physical objects/parts visible.
-11. If you are not sure, default to 'one'.
-12. Always double-check for character confusion: '1' vs 'I', '0' vs 'O', etc.
-13. Ignore numbers that are clearly dates, serials, or batch codes unless no other candidates exist.
+# OEM Numbers for Car Computers (ECU/ECM/PCM)
+| Brand                | Typical Format              | Examples                                      |
+|----------------------|----------------------------|-----------------------------------------------|
+| Toyota / Lexus       | 10 digits with dash        | 89661-02K21, 89661-0D110, 89661-60A30         |
+| Nissan               | Mix of letters & digits    | MEC32-560 A1, A18-000 M42, 23710-8H80A        |
+| Ford                 | Letters + digits + suffix  | 98AB-12A650-AD, 2S7A-12A650-LB, F7TF-12A650-BB|
+| BMW                  | 7-digit code (Bosch/Siemens)| 7533930, 7613572, 7857277                    |
+| Mercedes-Benz        | A + 10 digits              | A 271 153 56 79, A 642 150 26 79, A 646 150 79 79 |
+| Volkswagen / Audi    | Digits + letters + suffix  | 06A 906 032 HF, 03G 906 021 LG, 8E0 909 518 AF|
+| Hyundai / Kia        | 11 digits with dash        | 39110-2B103, 39100-2A960, 39101-2B020         |
+| Honda                | 37820-XXXXX-XXX            | 37820-RNA-A01, 37820-PND-A51, 37820-RBB-A04   |
+| Geely (China)        | 10 digits (1016… series)   | 1016051166, 1016055687, 1016057314            |
+| Chery (China)        | Alphanumeric with dash     | A11-3605010BB, T11-3605010, A21-3605010BA     |
+| Great Wall / Haval (China)| 3605… / 36051… codes  | 3605100-EG01, 3605100-K00, 3605100XKZ16A      |
 
 Output strictly in this format (always in English, always 3 fields, always separated by |):
 <START> [Brand/Model Guess] | [Model/Part Number(s)] | [one/many] <END>
-
-- [Brand/Model Guess]: The car brand/model you used (from description or inferred from image), or None.
-- [Model/Part Number(s)]: The main serial/OEM part number(s) found (from description or image), or None. If there are multiple physical objects, separate numbers with commas.
-- [one/many]: Write 'many' only if there are multiple separate physical objects/parts visible in the image. If only one part is visible (even with several numbers), write 'one'. If unsure, write 'one'.
 
 If you don't know a value, write None. Do not output anything else except the required 3 fields in the specified format. Always answer in English.
 """
@@ -333,7 +337,6 @@ class GeminiInference:
             )
             if return_usage:
                 answer, usage = result
-                logging.info(f"[GeminiInference] Raw usage from model: {repr(usage)}")
                 # usage должен быть dict с нужными полями
                 if not isinstance(usage, dict):
                     try:
