@@ -705,8 +705,8 @@ if __name__ == "__main__":
             stage = usage_file
         try:
             df = pd.read_csv(usage_file)
-            # Если только одна колонка _pb, парсим usage из текста
-            if set(df.columns) == {"_pb"}:
+            # Если есть колонка _pb, парсим usage из текста
+            if "_pb" in df.columns:
                 import re
 
                 prompt_sum = 0
@@ -749,6 +749,37 @@ if __name__ == "__main__":
                 f"{stage}: prompt={int(prompt_sum)}, candidates={int(candidates_sum)}, total={int(total_sum)}"
             )
         logging.info("=============================")
+    # --- Подсчет total_token_count из usage файлов (_pb) с красивым выводом ---
+    import re
+
+    usage_labels = {
+        "description": "описание",
+        "image": "картинки",
+        "number": "номер",
+    }
+    for usage_file in usage_files:
+        try:
+            df = pd.read_csv(usage_file)
+            if "_pb" in df.columns:
+
+                def extract_total_token_count(s):
+                    m = re.search(r"total_token_count:\s*(\\d+)", str(s))
+                    return int(m.group(1)) if m else 0
+
+                total = df["_pb"].apply(extract_total_token_count).sum()
+                # определяем тип файла для подписи
+                label = None
+                for k, v in usage_labels.items():
+                    if k in usage_file:
+                        label = v
+                        break
+                if not label:
+                    label = usage_file
+                logging.info(f"{label} - {total}")
+        except Exception as e:
+            logging.warning(
+                f"[USAGE] Не удалось посчитать total_token_count в {usage_file}: {e}"
+            )
     if usage_files:
         logging.info(f"\n==== TOTAL TOKEN USAGE ====")
         logging.info(f"Prompt tokens: {int(total_prompt)}")

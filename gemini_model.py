@@ -345,6 +345,7 @@ class GeminiInference:
             )
             if return_usage:
                 answer, usage = result
+                logging.info(f"[GeminiInference] Raw usage from model: {repr(usage)}")
                 # usage должен быть dict с нужными полями
                 if not isinstance(usage, dict):
                     try:
