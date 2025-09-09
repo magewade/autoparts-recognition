@@ -92,7 +92,8 @@ class GeminiInference:
         car_brand=None,
         prompt_override=None,
     ):
-        logging.info(f"[GeminiInference] Using model: {model_name}")
+        self.model_name = model_name
+        logging.info(f"[GeminiInference] Using model: {self.model_name}")
 
         self.car_brand = car_brand
 
@@ -129,13 +130,13 @@ class GeminiInference:
         # Всегда используем только DEFAULT_PROMPT
 
         self.model = genai.GenerativeModel(
-            model_name=model_name,
+            model_name=self.model_name,
             generation_config=generation_config,
             safety_settings=safety_settings,
             system_instruction=self.system_prompt,
         )
 
-        self.validator_model = self.create_validator_model(model_name)
+        self.validator_model = self.create_validator_model(self.model_name)
         self.incorrect_predictions = []
         self.message_history = []
 
@@ -338,7 +339,8 @@ class GeminiInference:
         self.message_history = []
 
     def __call__(self, image_path, return_usage=False):
-        self.configure_api()
+        if not hasattr(self, "last_successful_key_index"):
+            self.last_successful_key_index = 0
 
         if image_path.startswith("http"):
             headers = {"User-Agent": "Mozilla/5.0 (compatible; autoparts-bot/1.0)"}
@@ -353,9 +355,13 @@ class GeminiInference:
         prompt = DEFAULT_PROMPT + f"Image: {image_path}"
         num_keys = len(self.api_keys)
         max_retries = 5
-        for key_attempt in range(num_keys):
+        for offset in range(num_keys):
+            key_attempt = (self.last_successful_key_index + offset) % num_keys
             self.current_key_index = key_attempt
             self.configure_api()
+            logging.info(
+                f"[GeminiInference] Switched to API key index: {self.current_key_index}"
+            )
             for attempt in range(max_retries):
                 try:
                     response = self.model.generate_content(prompt)
@@ -371,6 +377,8 @@ class GeminiInference:
                         usage = usage_to_dict(None)
                     logging.info(f"[GeminiInference] Answer: {guess}")
                     time.sleep(2.1)
+                    # If we get a valid answer, remember this key for next time
+                    self.last_successful_key_index = key_attempt
                     if return_usage:
                         return guess, usage
                     return guess

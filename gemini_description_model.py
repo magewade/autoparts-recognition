@@ -149,9 +149,15 @@ class GeminiDescriptionInference:
         prompt = DESCRIPTION_MODEL_PROMPT + f"Description: {desc}"
         num_keys = len(self.api_keys)
         max_retries = 5
-        for key_attempt in range(num_keys):
+        if not hasattr(self, "last_successful_key_index"):
+            self.last_successful_key_index = 0
+        for offset in range(num_keys):
+            key_attempt = (self.last_successful_key_index + offset) % num_keys
             self.current_key_index = key_attempt
             self.configure_api()
+            logging.info(
+                f"[Desc LLM] Switched to API key index: {self.current_key_index}"
+            )
             for attempt in range(max_retries):
                 try:
                     response = self.model.generate_content(prompt)
@@ -167,6 +173,8 @@ class GeminiDescriptionInference:
                         usage = usage_to_dict(None)
                     logging.info(f"[LLM desc] Answer: {guess}")
                     time.sleep(2.1)
+                    # If we get a valid answer, remember this key for next time
+                    self.last_successful_key_index = key_attempt
                     if return_usage:
                         return clean_llm_output(guess), usage
                     return clean_llm_output(guess)
