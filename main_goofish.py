@@ -525,26 +525,16 @@ def run_full_pipeline(cli_args):
                     model_name=cli_args.gemini_api_model,
                     car_brand=row.get("description_model_guess", None),
                 )
-                # Предполагаем, что inference возвращает usage если return_usage=True
                 number, usage = (
                     gemini(found_link, return_usage=True)
                     if hasattr(gemini, "__call__")
                     and "return_usage" in gemini.__call__.__code__.co_varnames
                     else (gemini(found_link), None)
                 )
-                if usage and isinstance(usage, dict):
-                    if "_pb" in usage:
-                        import re
-
-                        s = str(usage["_pb"])
-
-                        def extract(key):
-                            m = re.search(rf"{key}: ?(\\d+)", s)
-                            return m.group(1) if m else "None"
-
-                        usage_str = f"prompt_token_count: {extract('prompt_token_count')} candidates_token_count: {extract('candidates_token_count')} total_token_count: {extract('total_token_count')}"
-                    else:
-                        usage_str = f"prompt_token_count: {usage.get('prompt_token_count', 'None')} candidates_token_count: {usage.get('candidates_token_count', 'None')} total_token_count: {usage.get('total_token_count', 'None')}"
+                if usage and isinstance(usage, dict) and "_pb" in usage:
+                    usage_str = str(usage["_pb"])
+                elif usage and isinstance(usage, dict):
+                    usage_str = f"prompt_token_count: {usage.get('prompt_token_count', 'None')} candidates_token_count: {usage.get('candidates_token_count', 'None')} total_token_count: {usage.get('total_token_count', 'None')}"
             except Exception as e:
                 logging.warning(f"[GeminiInference] Ошибка для {found_link}: {e}")
                 number = "ERROR"
@@ -661,7 +651,6 @@ if __name__ == "__main__":
     inference_time = run_full_pipeline(cli_args)
 
     # Финальная сводка по времени
-
     def fmt_time(val):
         return f"{val/60:.2f} мин" if val is not None else "пропущен"
 
@@ -690,94 +679,3 @@ if __name__ == "__main__":
         f"\nВсего: {total_time/60:.2f} мин"
         f"\n====================="
     )
-
-    # --- Финальный подсчет usage_metadata по всем моделям ---
-    import glob
-    import pandas as pd
-
-    usage_files = glob.glob("*_usage.csv")
-    total_prompt = 0
-    total_candidates = 0
-    total_tokens = 0
-    required_cols = [
-        "prompt_token_count",
-        "candidates_token_count",
-        "total_token_count",
-    ]
-    stage_totals = {}
-    for usage_file in usage_files:
-        stage = None
-        if "description" in usage_file:
-            stage = "Description LLM"
-        elif "image" in usage_file:
-            stage = "Image LLM (one/many/barcode)"
-        elif "number" in usage_file:
-            stage = "Number Extraction LLM"
-        else:
-            stage = usage_file
-        try:
-            df = pd.read_csv(usage_file)
-            # Если есть колонка _pb, парсим usage из текста
-            if "_pb" in df.columns:
-                import re
-
-                prompt_sum = 0
-                candidates_sum = 0
-                total_sum = 0
-                for val in df["_pb"].astype(str):
-                    m = re.search(r"prompt_token_count: (\d+)", val)
-                    if m:
-                        prompt_sum += int(m.group(1))
-                    m = re.search(r"candidates_token_count: (\d+)", val)
-                    if m:
-                        candidates_sum += int(m.group(1))
-                    m = re.search(r"total_token_count: (\d+)", val)
-                    if m:
-                        total_sum += int(m.group(1))
-                stage_totals[stage] = (prompt_sum, candidates_sum, total_sum)
-                total_prompt += prompt_sum
-                total_candidates += candidates_sum
-                total_tokens += total_sum
-                continue
-            missing = [col for col in required_cols if col not in df.columns]
-            if missing:
-                logging.warning(
-                    f"[USAGE] В файле {usage_file} отсутствуют колонки: {missing}. Пропускаю этот файл."
-                )
-                continue
-            prompt_sum = df["prompt_token_count"].fillna(0).sum()
-            candidates_sum = df["candidates_token_count"].fillna(0).sum()
-            total_sum = df["total_token_count"].fillna(0).sum()
-            stage_totals[stage] = (prompt_sum, candidates_sum, total_sum)
-            total_prompt += prompt_sum
-            total_candidates += candidates_sum
-            total_tokens += total_sum
-        except Exception as e:
-            logging.warning(f"[USAGE] Не удалось прочитать {usage_file}: {e}")
-    if stage_totals:
-        # --- Только подсчет total_token_count из usage файлов (_pb) с красивым выводом ---
-        usage_labels = {
-            "description": "Description",
-            "image": "Images",
-            "number": "Numbers",
-        }
-        stage_totals_simple = {k: 0 for k in usage_labels.values()}
-        for usage_file in usage_files:
-            try:
-                df = pd.read_csv(usage_file)
-                if "_pb" in df.columns:
-
-                    def extract_total_token_count(s):
-                        m = re.search(r"total_token_count:\s*(\\d+)", str(s))
-                        return int(m.group(1)) if m else 0
-
-                    total = df["_pb"].apply(extract_total_token_count).sum()
-                    for k, v in usage_labels.items():
-                        if k in usage_file:
-                            stage_totals_simple[v] += total
-            except Exception as e:
-                logging.warning(
-                    f"[USAGE] Не удалось посчитать total_token_count в {usage_file}: {e}"
-                )
-        for label in usage_labels.values():
-            logging.info(f"{label}: {stage_totals_simple[label]}")

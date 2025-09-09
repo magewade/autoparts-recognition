@@ -20,9 +20,7 @@ DEFAULT_PROMPT = """
 You are an expert at extracting automotive part/model numbers from images. You are given the following information from a previous analysis of the product description:
 
 [Description LLM output]
-Brand: {car_brand}
-Numbers: {desc_numbers}
-One_or_many: {desc_one_many}
+Brand | Numebers | One_or_many: {car_brand}
 
 Your task:
 1. Use all information above to help you analyze the image. If any field is missing or 'None', try to fill it using the image.
@@ -88,26 +86,20 @@ class GeminiInference:
         api_keys,
         model_name="gemini-2.5-flash",
         car_brand=None,
-        desc_numbers=None,
-        desc_one_many=None,
         prompt_override=None,
     ):
         logging.info(f"[GeminiInference] Using model: {model_name}")
 
         self.car_brand = car_brand
-        self.desc_numbers = desc_numbers
-        self.desc_one_many = desc_one_many
 
         self.api_keys = api_keys
         self.current_key_index = 0
         # Всегда используем только DEFAULT_PROMPT
         logging.info(
-            f"[GeminiInference] Description info for prompt: brand='{car_brand}', numbers='{desc_numbers}', one_many='{desc_one_many}'"
+            f"[GeminiInference] Description info for prompt: brand='{car_brand}'"
         )
         prompt_filled = DEFAULT_PROMPT.format(
-            car_brand=car_brand if car_brand is not None else "None",
-            desc_numbers=desc_numbers if desc_numbers is not None else "None",
-            desc_one_many=desc_one_many if desc_one_many is not None else "None",
+            car_brand=car_brand if car_brand is not None else "None"
         )
         if prompt_override:
             self.system_prompt = prompt_override.strip() + "\n\n" + prompt_filled
