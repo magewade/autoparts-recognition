@@ -323,74 +323,48 @@ class GeminiInference:
             img_data = img
 
         self.message_history = []
-
+        num_keys = len(self.api_keys)
         max_attempts = 2
-        for attempt in range(max_attempts):
-            if attempt == 1:
-                orig_prompt = self.system_prompt
-                self.system_prompt = (
-                    "Previous answer did not match required format (must contain exactly 2 pipe | characters and 3 fields). STRICTLY follow the output format!\n\n"
-                    + orig_prompt
-                )
-            result = self.get_response(
-                img_data, retry=(attempt > 0), return_usage=return_usage
+        for key_attempt in range(num_keys):
+            self.current_key_index = key_attempt
+            self.configure_api()
+            logging.info(
+                f"[GeminiInference] Using API key index {self.current_key_index}: {self.api_keys[self.current_key_index]}"
             )
-            if return_usage:
-                answer, usage = result
-                # usage должен быть dict с нужными полями
-                if not isinstance(usage, dict):
-                    try:
-                        from dataclasses import asdict
-
-                        usage = asdict(usage)
-                    except Exception:
-                        usage = (
-                            vars(usage) if hasattr(usage, "__dict__") else dict(usage)
-                        )
-                # fallback если usage невалиден
-                for k in [
-                    "prompt_token_count",
-                    "candidates_token_count",
-                    "total_token_count",
-                ]:
-                    if k not in usage:
-                        usage[k] = None
-            else:
-                answer = result
-            if answer.count("|") != 2:
-                logging.info(
-                    f"LLM output format invalid (pipes: {answer.count('|')}), retrying..."
-                    if attempt == 0
-                    else "All attempts failed or only nan found."
+            for attempt in range(max_attempts):
+                if attempt == 1:
+                    orig_prompt = self.system_prompt
+                    self.system_prompt = (
+                        "Previous answer did not match required format (must contain exactly 2 pipe | characters and 3 fields). STRICTLY follow the output format!\n\n"
+                        + orig_prompt
+                    )
+                result = self.get_response(
+                    img_data, retry=(attempt > 0), return_usage=return_usage
                 )
-                if attempt == max_attempts - 1:
-                    break
-                continue
-            extracted_number = self.extract_number(answer)
-
-            logging.info(f"Attempt {attempt + 1}: Extracted number: {extracted_number}")
-
-            if extracted_number.strip().lower() != "none | none | none":
-                self.reset_incorrect_predictions()
                 if return_usage:
-                    return extracted_number, usage
+                    answer, usage = result
+                    if not isinstance(usage, dict):
+                        try:
+                            from dataclasses import asdict
+
+                            usage = asdict(usage)
+                        except Exception:
+                            usage = (
+                                vars(usage)
+                                if hasattr(usage, "__dict__")
+                                else dict(usage)
+                            )
+                    if not answer or not isinstance(answer, str):
+                        continue
+                    if answer.count("|") == 2:
+                        return answer, usage
                 else:
-                    return extracted_number
-
-            if attempt < max_attempts - 1:
-                logging.info(
-                    f"No valid number found in attempt {attempt + 1}, retrying..."
-                )
-
-        logging.warning("All attempts failed or only None found.")
-        self.reset_incorrect_predictions()
-        if return_usage:
-            return (
-                "None | None | None",
-                {
-                    "prompt_token_count": None,
-                    "candidates_token_count": None,
-                    "total_token_count": None,
-                },
+                    answer = result
+                    if not answer or not isinstance(answer, str):
+                        continue
+                    if answer.count("|") == 2:
+                        return answer
+            logging.info(
+                f"[GeminiInference] Switching to next API key (index {key_attempt+1})"
             )
-        return "None | None | None"
+        raise Exception("Max attempts reached for GeminiInference.")

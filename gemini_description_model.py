@@ -118,33 +118,45 @@ class GeminiDescriptionInference:
             "Do not use any tags, brackets, or extra formatting. Only output the three fields separated by |. "
             f"Description: {desc}"
         )
+        num_keys = len(self.api_keys)
         max_retries = 5
-        for attempt in range(max_retries):
-            try:
-                response = self.model.generate_content(prompt)
-                guess = response.text.strip()
-                # usage_metadata может быть на response или response.result
-                usage = None
-                if hasattr(response, "result") and hasattr(
-                    response.result, "usage_metadata"
-                ):
-                    usage = usage_to_dict(response.result.usage_metadata)
-                elif hasattr(response, "usage_metadata"):
-                    usage = usage_to_dict(response.usage_metadata)
-                else:
-                    usage = usage_to_dict(None)
-                logging.info(f"[LLM desc] Answer: {guess}")
-                time.sleep(2.1)  # <= 30 запросов в минуту
-                if return_usage:
-                    return clean_llm_output(guess), usage
-                return clean_llm_output(guess)
-            except Exception as e:
-                if "quota" in str(e).lower():
-                    self.switch_api_key()
+        for key_attempt in range(num_keys):
+            self.current_key_index = key_attempt
+            self.configure_api()
+            logging.info(
+                f"[LLM desc] Using API key index {self.current_key_index}: {self.api_keys[self.current_key_index]}"
+            )
+            for attempt in range(max_retries):
+                try:
+                    response = self.model.generate_content(prompt)
+                    guess = response.text.strip()
+                    usage = None
+                    if hasattr(response, "result") and hasattr(
+                        response.result, "usage_metadata"
+                    ):
+                        usage = usage_to_dict(response.result.usage_metadata)
+                    elif hasattr(response, "usage_metadata"):
+                        usage = usage_to_dict(response.usage_metadata)
+                    else:
+                        usage = usage_to_dict(None)
+                    logging.info(f"[LLM desc] Answer: {guess}")
                     time.sleep(2.1)
-                else:
-                    logging.warning(f"[Desc LLM] Error: {e}")
-                    time.sleep(2.1)
+                    if return_usage:
+                        return clean_llm_output(guess), usage
+                    return clean_llm_output(guess)
+                except Exception as e:
+                    if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                        logging.warning(
+                            f"[LLM desc] Quota or rate limit error for API key {self.current_key_index}: {e}"
+                        )
+                        time.sleep(2.1)
+                        continue
+                    else:
+                        logging.warning(f"[Desc LLM] Error: {e}")
+                        time.sleep(2.1)
+            logging.info(
+                f"[LLM desc] Switching to next API key (index {key_attempt+1})"
+            )
         if return_usage:
             return "ERROR", {
                 "prompt_token_count": None,

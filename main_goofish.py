@@ -412,7 +412,7 @@ def run_full_pipeline(cli_args):
                 )
                 try:
                     pred, usage_item = process_images_one_many_and_barcode_label(
-                        [img_url], api_keys, model_name="gemini-2.0-flash-lite"
+                        [img_url], api_keys, model_name=cli_args.one_many_model
                     )
                     preds.extend(pred)
                     usage.extend(usage_item)
