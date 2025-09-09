@@ -175,7 +175,7 @@ class GeminiInference:
                     "threshold": "BLOCK_ONLY_HIGH",
                 },
             ],
-            system_instruction=OEM_MODEL_PROMPT,
+            system_instruction=DEFAULT_PROMPT,
         )
 
     def switch_api_key(self):
@@ -350,51 +350,40 @@ class GeminiInference:
                 raise FileNotFoundError(f"Could not find image: {img}")
             img_data = img
 
-        self.message_history = []
+        prompt = DEFAULT_PROMPT + f"Image: {image_path}"
         num_keys = len(self.api_keys)
-        max_attempts = 2
+        max_retries = 5
         for key_attempt in range(num_keys):
             self.current_key_index = key_attempt
             self.configure_api()
-            logging.info(
-                f"[GeminiInference] Using API key index {self.current_key_index}: {self.api_keys[self.current_key_index]}"
-            )
-            for attempt in range(max_attempts):
-                if attempt == 1:
-                    orig_prompt = self.system_prompt
-                    self.system_prompt = (
-                        "Previous answer did not match required format (must contain exactly 2 pipe | characters and 3 fields). STRICTLY follow the output format!\n\n"
-                        + orig_prompt
-                    )
-                result = self.get_response(
-                    img_data, retry=(attempt > 0), return_usage=return_usage
-                )
-                if return_usage:
-                    answer, usage = result
-                    if not isinstance(usage, dict):
-                        try:
-                            from dataclasses import asdict
-
-                            usage = asdict(usage)
-                        except Exception:
-                            usage = (
-                                vars(usage)
-                                if hasattr(usage, "__dict__")
-                                else dict(usage)
-                            )
-                    if not answer or not isinstance(answer, str):
+            for attempt in range(max_retries):
+                try:
+                    response = self.model.generate_content(prompt)
+                    guess = response.text.strip()
+                    usage = None
+                    if hasattr(response, "result") and hasattr(
+                        response.result, "usage_metadata"
+                    ):
+                        usage = usage_to_dict(response.result.usage_metadata)
+                    elif hasattr(response, "usage_metadata"):
+                        usage = usage_to_dict(response.usage_metadata)
+                    else:
+                        usage = usage_to_dict(None)
+                    logging.info(f"[GeminiInference] Answer: {guess}")
+                    time.sleep(2.1)
+                    if return_usage:
+                        return guess, usage
+                    return guess
+                except Exception as e:
+                    if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                        logging.warning(
+                            f"[GeminiInference] Quota or rate limit error for API key {self.current_key_index}: {e}"
+                        )
+                        time.sleep(2.1)
                         continue
-                    if answer.count("|") == 2:
-                        logging.info(f"[GeminiInference] Answer: {answer}")
-                        return answer, usage
-                else:
-                    answer = result
-                    if not answer or not isinstance(answer, str):
-                        continue
-                    if answer.count("|") == 2:
-                        logging.info(f"[GeminiInference] Answer: {answer}")
-                        return answer
-            logging.info(
-                f"[GeminiInference] Switching to next API key (index {key_attempt+1})"
-            )
-        raise Exception("Max attempts reached for GeminiInference.")
+                    else:
+                        logging.error(f"[GeminiInference] Error: {e}")
+                        break
+        if return_usage:
+            return "unknown | None | one", None
+        return "unknown | None | one"
