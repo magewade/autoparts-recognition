@@ -381,7 +381,7 @@ class GeminiInference:
                     logging.info(f"[GeminiInference] Answer: {guess}")
                     time.sleep(2.1)
                     # If we get a valid answer, remember this key for next time
-                    self.last_successful_key_index = key_attempt
+                    self.last_successful_key_index = self.current_key_index
                     if return_usage:
                         return guess, usage
                     return guess

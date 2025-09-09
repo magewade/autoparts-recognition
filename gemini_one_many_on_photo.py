@@ -252,7 +252,6 @@ class GeminiPhotoOneManyBarcodeInference:
         Always starts with the last successful key.
         """
         num_keys = len(self.api_keys)
-        # last_successful_key_index is now initialized in __init__
 
         if image_path.startswith("http"):
             headers = {"User-Agent": "Mozilla/5.0 (compatible; autoparts-bot/1.0)"}
@@ -265,9 +264,9 @@ class GeminiPhotoOneManyBarcodeInference:
                 raise FileNotFoundError(f"Could not find image: {img}")
             img_data = img
 
-        # Try keys starting from last_successful_key_index, then wrap around
+        # Always start cycling from the current_key_index
         for offset in range(num_keys):
-            key_attempt = (self.last_successful_key_index + offset) % num_keys
+            key_attempt = (self.current_key_index + offset) % num_keys
             self.current_key_index = key_attempt
             logging.info(
                 f"[Photo LLM] Using API key index: {self.current_key_index}, key: {self.api_keys[self.current_key_index][:8]}...{self.api_keys[self.current_key_index][-4:]}"
@@ -280,7 +279,8 @@ class GeminiPhotoOneManyBarcodeInference:
                 )
                 continue
             # If we get a valid answer, remember this key for next time
-            self.last_successful_key_index = key_attempt
+            self.last_successful_key_index = self.current_key_index
+            # Also set current_key_index to the working key for next call
             if return_usage:
                 answer, usage = result
                 logging.info(f"[LLM photo one/many+barcode] Answer: {answer}")

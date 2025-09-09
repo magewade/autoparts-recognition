@@ -157,10 +157,9 @@ class GeminiDescriptionInference:
         max_retries = 3
         # last_successful_key_index is now initialized in __init__
         for offset in range(num_keys):
-            key_attempt = (self.last_successful_key_index + offset) % num_keys
+            key_attempt = (self.current_key_index + offset) % num_keys
             self.current_key_index = key_attempt
             self.configure_api()
-            # logging removed: switched to API key index
             for attempt in range(max_retries):
                 try:
                     response = self.model.generate_content(prompt)
@@ -177,7 +176,7 @@ class GeminiDescriptionInference:
                     logging.info(f"[LLM desc] Answer: {guess}")
                     time.sleep(2.1)
                     # If we get a valid answer, remember this key for next time
-                    self.last_successful_key_index = key_attempt
+                    self.last_successful_key_index = self.current_key_index
                     if return_usage:
                         return clean_llm_output(guess), usage
                     return clean_llm_output(guess)
