@@ -143,6 +143,7 @@ class GeminiDescriptionInference:
 
     def switch_api_key(self):
         self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+        self.last_successful_key_index = self.current_key_index
         self.configure_api()
 
     # logging removed: switched to API key index
