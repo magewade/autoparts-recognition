@@ -142,7 +142,10 @@ class GeminiDescriptionInference:
         )
 
     def switch_api_key(self):
-        self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+        exhausted_key = self.api_keys.pop(self.current_key_index)
+        self.api_keys.append(exhausted_key)
+        if self.current_key_index >= len(self.api_keys):
+            self.current_key_index = 0
         self.last_successful_key_index = self.current_key_index
         self.configure_api()
 
@@ -151,7 +154,7 @@ class GeminiDescriptionInference:
     def __call__(self, desc, return_usage=False):
         prompt = DESCRIPTION_MODEL_PROMPT + f"Description: {desc}"
         num_keys = len(self.api_keys)
-        max_retries = 5
+        max_retries = 3
         # last_successful_key_index is now initialized in __init__
         for offset in range(num_keys):
             key_attempt = (self.last_successful_key_index + offset) % num_keys

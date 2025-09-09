@@ -181,7 +181,10 @@ class GeminiInference:
         )
 
     def switch_api_key(self):
-        self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+        exhausted_key = self.api_keys.pop(self.current_key_index)
+        self.api_keys.append(exhausted_key)
+        if self.current_key_index >= len(self.api_keys):
+            self.current_key_index = 0
         self.last_successful_key_index = self.current_key_index
         self.configure_api()
 

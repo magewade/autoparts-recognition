@@ -160,7 +160,12 @@ class GeminiPhotoOneManyBarcodeInference:
         )
 
     def switch_api_key(self):
-        self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+        # Move the exhausted key to the end of the list
+        exhausted_key = self.api_keys.pop(self.current_key_index)
+        self.api_keys.append(exhausted_key)
+        # Stay at the same index, which now points to the next key
+        if self.current_key_index >= len(self.api_keys):
+            self.current_key_index = 0
         self.last_successful_key_index = self.current_key_index
         self.configure_api()
 
@@ -264,8 +269,10 @@ class GeminiPhotoOneManyBarcodeInference:
         for offset in range(num_keys):
             key_attempt = (self.last_successful_key_index + offset) % num_keys
             self.current_key_index = key_attempt
+            logging.info(
+                f"[Photo LLM] Using API key index: {self.current_key_index}, key: {self.api_keys[self.current_key_index][:8]}...{self.api_keys[self.current_key_index][-4:]}"
+            )
             self.configure_api()
-            # logging removed: switched to API key index
             result = self.get_response(img_data, return_usage=return_usage)
             if not result or (return_usage and not result[0]):
                 logging.info(
