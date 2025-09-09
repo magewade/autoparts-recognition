@@ -133,7 +133,7 @@ class GeminiDescriptionInference:
                     usage = usage_to_dict(response.usage_metadata)
                 else:
                     usage = usage_to_dict(None)
-                logging.info(f"[LLM desc] Ответ: {guess}")
+                logging.info(f"[LLM desc] Answer: {guess}")
                 time.sleep(2.1)  # <= 30 запросов в минуту
                 if return_usage:
                     return clean_llm_output(guess), usage

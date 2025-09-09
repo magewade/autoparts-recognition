@@ -129,28 +129,28 @@ async def enrich_dataframe_playwright_async(
         page = await context.new_page()
         last_i = -1
         for i, row in tqdm_asyncio(
-            df.iterrows(), total=len(df), desc="Парсинг товаров"
+            df.iterrows(), total=len(df), desc="Parsing products"
         ):
             last_i = i
             url = row["href"]
-            print(f"[Main] Обрабатываем {url}")
+            print(f"[Main] Processing {url}")
             try:
                 imgs = await parser.parse_big_images(url, page)
-                print(f"[Main] Собрано {len(imgs)} картинок")
+                print(f"[Main] Collected {len(imgs)} images")
             except Exception as e:
-                print(f"[Error] Не удалось собрать картинки: {e}")
+                print(f"[Error] Failed to collect images: {e}")
                 imgs = []
             images_all.append(imgs)
             try:
                 product_info = await parser.load_product_info(url, page)
                 price = product_info.get("price", "N/A")
                 description = product_info.get("description", "")
-                print(f"[Main] Цена: {price}")
+                print(f"[Main] Price: {price}")
                 print(
-                    f"[Main] Описание: {description[:80]}{'...' if len(description)>80 else ''}"
+                    f"[Main] Description: {description[:80]}{'...' if len(description)>80 else ''}"
                 )
             except Exception as e:
-                print(f"[Error] Не удалось загрузить цену/описание: {e}")
+                print(f"[Error] Failed to load price/description: {e}")
                 price = "N/A"
                 description = ""
             prices.append(price)
@@ -162,15 +162,15 @@ async def enrich_dataframe_playwright_async(
                 temp_df["images"] = images_all
                 temp_df["description"] = descriptions
                 temp_df.to_csv(output_path, index=False)
-                print(f"[Info] Промежуточные результаты записаны в {output_path}")
-        # Сохраняем финальный результат, если не делится на chunk_size
+                print(f"[Info] Intermediate results saved to {output_path}")
+        # Save final result if not divisible by chunk_size
         if last_i >= 0 and (last_i + 1) % chunk_size != 0:
             temp_df = df.iloc[: last_i + 1].copy()
             temp_df["price"] = prices
             temp_df["images"] = images_all
             temp_df["description"] = descriptions
             temp_df.to_csv(output_path, index=False)
-            print(f"[Info] Финальные результаты записаны в {output_path}")
+            print(f"[Info] Final results saved to {output_path}")
         await browser.close()
     return pd.read_csv(output_path)
 
@@ -322,7 +322,7 @@ class Processor(metaclass=RuntimeMeta):
             writer.writerow(["img_src", "href"])
             for img_src, href in links:
                 writer.writerow([img_src, href])
-            print(f"Сохранено {len(links)} ссылок в {filename}")
+            print(f"Saved {len(links)} links to {filename}")
 
     def generate_similar_user_agents(self):
         return [
@@ -380,9 +380,9 @@ class Processor(metaclass=RuntimeMeta):
                 random.uniform(0.2, 0.7)
             ).click().perform()
             human_sleep(1, 2)
-            print("Попап закрыт")
+            print("Popup closed")
         except Exception as e:
-            print("Попап не найден или уже закрыт")
+            print("Popup not found or already closed")
 
         # Кликаем по кнопке поиска
         max_search_attempts = 3
@@ -401,15 +401,15 @@ class Processor(metaclass=RuntimeMeta):
                     random.uniform(0.3, 1.2)
                 ).click().perform()
                 human_sleep(2.5, 5.5)
-                print("Поиск выполнен")
+                print("Search performed")
                 break  # если успешно, выходим из цикла
             except Exception as e:
                 print(
-                    f"Кнопка поиска не найдена или не нажата (попытка {attempt+1}):", e
+                    f"Search button not found or not clicked (attempt {attempt+1}):", e
                 )
                 human_sleep(1, 2)
         else:
-            print("Не удалось нажать на поиск после нескольких попыток.")
+            print("Failed to click search after several attempts.")
 
         for page in range(1, max_steps + 1):
             # Случайный скролл вверх/вниз
@@ -468,7 +468,7 @@ class Processor(metaclass=RuntimeMeta):
                     driver.execute_script("arguments[0].click();", next_arrow_btn)
                 human_sleep(2.5, 5.5)
             except Exception as e:
-                print(f"Не удалось перейти на страницу {page+1} по стрелке: {e}")
+                print(f"Failed to go to page {page+1} by arrow: {e}")
                 break
 
         return collected

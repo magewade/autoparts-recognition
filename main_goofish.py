@@ -689,7 +689,10 @@ if __name__ == "__main__":
         ("image", "products_image_usage.csv"),
         ("number", "products_number_usage.csv"),
     ]
-    pattern = re.compile(r"total_token_count\s*:\s*(\d+)", flags=re.IGNORECASE)
+    prompt_pattern = re.compile(r"prompt_token_count\s*:\s*(\d+)", flags=re.IGNORECASE)
+    candidates_pattern = re.compile(
+        r"candidates_token_count\s*:\s*(\d+)", flags=re.IGNORECASE
+    )
     results = []
     for stage, fp in stage_files:
         p = Path(fp)
@@ -697,7 +700,8 @@ if __name__ == "__main__":
             results.append(
                 {
                     "stage": stage,
-                    "total_token_count_sum": None,
+                    "prompt_token_count_sum": None,
+                    "candidates_token_count_sum": None,
                     "error": "file not found",
                 }
             )
@@ -746,17 +750,28 @@ if __name__ == "__main__":
             results.append(
                 {
                     "stage": stage,
-                    "total_token_count_sum": None,
+                    "prompt_token_count_sum": None,
+                    "candidates_token_count_sum": None,
                     "error": "_pb column not found",
                 }
             )
             continue
-        total_sum = 0
+        prompt_sum = 0
+        candidates_sum = 0
         for cell in df[pb_col].astype(str).fillna(""):
-            matches = pattern.findall(cell)
-            if matches:
-                total_sum += sum(int(m) for m in matches)
-        results.append({"stage": stage, "total_token_count_sum": int(total_sum)})
+            prompt_matches = prompt_pattern.findall(cell)
+            if prompt_matches:
+                prompt_sum += sum(int(m) for m in prompt_matches)
+            candidates_matches = candidates_pattern.findall(cell)
+            if candidates_matches:
+                candidates_sum += sum(int(m) for m in candidates_matches)
+        results.append(
+            {
+                "stage": stage,
+                "prompt_token_count_sum": int(prompt_sum),
+                "candidates_token_count_sum": int(candidates_sum),
+            }
+        )
     res_df = pd.DataFrame(results).set_index("stage")
     stage_labels = {
         "description": "Description",
@@ -767,6 +782,11 @@ if __name__ == "__main__":
     res_df_disp.index = [stage_labels.get(idx, idx) for idx in res_df_disp.index]
     print("\n==== TOKEN USAGE SUMMARY ====")
     print(
-        res_df_disp.rename(columns={"total_token_count_sum": "Total token count sum"})
+        res_df_disp.rename(
+            columns={
+                "prompt_token_count_sum": "Total prompt tokens (->)",
+                "candidates_token_count_sum": "Total completion tokens (<-)",
+            }
+        )
     )
     print("============================\n")
