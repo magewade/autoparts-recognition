@@ -123,9 +123,6 @@ class GeminiDescriptionInference:
         for key_attempt in range(num_keys):
             self.current_key_index = key_attempt
             self.configure_api()
-            logging.info(
-                f"[LLM desc] Using API key index {self.current_key_index}: {self.api_keys[self.current_key_index]}"
-            )
             for attempt in range(max_retries):
                 try:
                     response = self.model.generate_content(prompt)

@@ -229,10 +229,6 @@ class GeminiPhotoOneManyBarcodeInference:
         for key_attempt in range(num_keys):
             self.current_key_index = key_attempt
             self.configure_api()
-            current_key = self.api_keys[self.current_key_index]
-            logging.info(
-                f"[Photo LLM] Using API key index {self.current_key_index}: {current_key}"
-            )
             max_attempts = 1
             for attempt in range(max_attempts):
                 result = self.get_response(img_data, return_usage=return_usage)
