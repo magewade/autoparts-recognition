@@ -31,7 +31,7 @@ def extract_model_from_description(
     model_name="gemini-2.5-flash-lite",
 ):
     """
-    Для каждой строки вызывает GeminiInference по description, сохраняет результат в description_model_guess.
+    For each row, calls GeminiInference on the description and saves the result in description_model_guess.
     """
 
     if api_keys is None:
@@ -132,7 +132,7 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
 
     df = pd.read_csv(parsed_csv)
     result_path = args.save_file_name + ".csv"
-    # Если есть столбец description_model_guess, будем использовать его для car_brand
+    # If there is a description_model_guess column, use it for car_brand
     has_model_guess = "description_model_guess" in df.columns
     if os.path.exists(result_path):
         df_result = pd.read_csv(result_path)
@@ -149,7 +149,7 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
         chunk_size = 10
         for i, row in df.iterrows():
             if processed_mask[i]:
-                continue  # уже обработано
+                continue  # already processed
             images = row.get("images", "[]")
             try:
                 images_list = (
@@ -165,7 +165,7 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
             predicted_images[i] = images_list[0] if images_list else ""
             confidences[i] = ""
             llm_pred = ""
-            # --- Парсим description_model_guess на brand, numbers, one_many ---
+            # --- Parse description_model_guess into brand, numbers, one_many ---
             desc_brand, desc_numbers, desc_one_many = None, None, None
             if has_model_guess:
                 guess = str(row.get("description_model_guess", "")).strip()
@@ -173,7 +173,7 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
                     parts = [p.strip() for p in guess.split("|")]
                     if len(parts) == 3:
                         desc_brand, desc_numbers, desc_one_many = parts
-            # Если нет guess, используем car_brand из аргументов
+            # If there is no guess, use car_brand from arguments
             if not desc_brand:
                 desc_brand = args.car_brand
             llm_row = GeminiInference(
@@ -189,7 +189,7 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
                     llm_pred = llm_row(predicted_images[i])
                     if not llm_pred:
                         raise ValueError(f"Empty LLM response: {llm_pred}")
-                    break  # успех
+                    break  # success
                 except Exception as e:
                     logging.warning(f"LLM error (attempt {attempt+1}): {e}")
                     llm_pred = ""
@@ -201,7 +201,7 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
                 temp_df["llm_prediction"] = llm_predictions
                 temp_df.to_csv(result_path, index=False)
                 logging.info(f"[Inference] Intermediate results saved to {result_path}")
-        # Финальный результат, если не делится на chunk_size
+        # Final result if not divisible by chunk_size
         temp_df = df.copy()
         temp_df["predicted_image"] = predicted_images
         temp_df["confidence"] = confidences
@@ -329,20 +329,20 @@ def main():
         )
         times["parsing"] = time.time() - t1
     logging.info("parsed_products.csv has been created")
-    # Восстанавливаем logging.info
+    # Restore logging.info
     logging.info = orig_logging_info
     return runtime_logs, times
 
 
 def run_full_pipeline(cli_args):
 
-    # === Засекаем время инференса ===
+    # === Start inference timer ===
     t_infer_start = time.time()
 
-    # 1. Сбор product_links.csv (должен быть уже собран до запуска этого пайплайна)
-    # 2. Парсинг товаров (описание, цена, картинки)
+    # 1. Collect product_links.csv (should already be collected before running this pipeline)
+    # 2. Parse products (description, price, images)
     #    -> parsed_products.csv
-    # 3. Инференс по описанию (LLM)
+    # 3. Inference on description (LLM)
     parsed_csv = "parsed_products.csv"
     parsed_with_model_csv = "parsed_products_with_model.csv"
     api_keys = cli_args.api_keys
@@ -357,7 +357,7 @@ def run_full_pipeline(cli_args):
         model_name=desc_model,
     )
 
-    # 4. Разделение на one/many по описанию
+    # 4. Split into one/many by description
     df_parsed = pd.read_csv(parsed_with_model_csv)
 
     def get_one_many(val):
@@ -397,7 +397,7 @@ def run_full_pipeline(cli_args):
             logging.warning(
                 f"[Image analysis] Не удалось обработать images для строки {idx}, images: {images}"
             )
-            # Попробуем взять первую картинку, если есть поле 'image' или 'image_url'
+            # Try to take the first image if there is a field 'image' or 'image_url'
             first_image = row.get("image") or row.get("image_url")
             if first_image:
                 images_list = [first_image]
@@ -439,7 +439,7 @@ def run_full_pipeline(cli_args):
             ]
         image_predictions.append(preds)
         image_usage_stats.append(usage)
-        # Автосейв каждые 10 строк
+        # Autosave every 10 rows
         if (idx + 1) % 5 == 0:
             df_temp = df_one_desc.copy()
             df_temp["image_predictions"] = image_predictions + [""] * (
@@ -459,7 +459,7 @@ def run_full_pipeline(cli_args):
             )
             usage_df.to_csv("products_image_usage_progress.csv", index=False)
             logging.info(
-                f"[LLM image] Промежуточные результаты записаны в products_one_image_progress.csv"
+                f"[LLM image] Intermediate results saved to products_one_image_progress.csv"
             )
     df_one_desc["image_predictions"] = image_predictions
     df_one_desc.to_csv("products_one_image.csv", index=False)
@@ -472,7 +472,7 @@ def run_full_pipeline(cli_args):
     usage_df = pd.DataFrame(usage_rows)
     usage_df.to_csv("products_image_usage.csv", index=False)
 
-    # 6. Отсев many/one по картинкам, many добавляем к products_many.csv
+    # 6. Filter many/one by images, add many to products_many.csv
     def has_many(preds):
         return any(str(p).lower().startswith("many") for p in preds)
 
@@ -492,7 +492,7 @@ def run_full_pipeline(cli_args):
         f"[SPLIT image] Final count: many={len(df_many_image)}, one={len(df_one_image)}, total={total_img_actual}"
     )
 
-    # 7. Инференс номера по чистому one
+    # 7. Number inference for pure one
     from gemini_model import GeminiInference
 
     df_one_img = pd.read_csv("products_one_image.csv")
@@ -538,7 +538,7 @@ def run_full_pipeline(cli_args):
                 elif usage and isinstance(usage, dict):
                     usage_str = f"prompt_token_count: {usage.get('prompt_token_count', 'None')} candidates_token_count: {usage.get('candidates_token_count', 'None')} total_token_count: {usage.get('total_token_count', 'None')}"
             except Exception as e:
-                logging.warning(f"[GeminiInference] Ошибка для {found_link}: {e}")
+                logging.warning(f"[GeminiInference] Error for {found_link}: {e}")
                 number = "ERROR"
         else:
             number = ""
@@ -550,7 +550,7 @@ def run_full_pipeline(cli_args):
     # Сохраняем usage для номера
     pd.DataFrame(number_usage_rows).to_csv("products_number_usage.csv", index=False)
 
-    # 8. Финальный отсев many/one по результатам инференса номера
+    # 8. Final filtering of many/one by number inference results
     def has_many_final(preds):
         return any(str(p).lower().startswith("many") for p in preds)
 
@@ -574,7 +574,7 @@ def run_full_pipeline(cli_args):
         f"[SPLIT number] Final count: many={len(df_many_number)}, one={len(df_one_number)}, total={total_number_actual}"
     )
 
-    # Финальный сбор
+    # Final aggregation
     df_many_number = (
         pd.read_csv("products_many_number.csv")
         if os.path.exists("products_many_number.csv")
@@ -655,10 +655,10 @@ if __name__ == "__main__":
     )
     cli_args = cli_parser.parse_args()
 
-    # Запуск пайплайна
+    # Run the pipeline
     inference_time = run_full_pipeline(cli_args)
 
-    # Финальная сводка по времени
+    # Final time summary
     def fmt_time(val):
         return f"{val/60:.2f} min" if val is not None else "skipped"
 

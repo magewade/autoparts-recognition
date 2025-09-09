@@ -81,7 +81,7 @@ def process_images_one_many_and_barcode_label(
             }
         predictions.append(pred)
         token_stats.append(usage)
-        time.sleep(random.uniform(1.2, 2))
+        # time.sleep(random.uniform(1.2, 2))
         if pred.lower().startswith("many"):
             break
     return predictions, token_stats
@@ -211,7 +211,10 @@ class GeminiPhotoOneManyBarcodeInference:
         )
 
     def __call__(self, image_path, return_usage=False):
-        self.configure_api()
+        """
+        Attempts inference with all available API keys before returning fallback.
+        """
+        num_keys = len(self.api_keys)
         if image_path.startswith("http"):
             headers = {"User-Agent": "Mozilla/5.0 (compatible; autoparts-bot/1.0)"}
             response = requests.get(image_path, stream=True, headers=headers)
@@ -223,30 +226,40 @@ class GeminiPhotoOneManyBarcodeInference:
                 raise FileNotFoundError(f"Could not find image: {img}")
             img_data = img
 
-        max_attempts = 2
-        for attempt in range(max_attempts):
-            result = self.get_response(img_data, return_usage=return_usage)
-            if not result or (return_usage and not result[0]):
-                logging.info("[Photo LLM] Empty answer, retrying...")
-                continue
-            if return_usage:
-                answer, usage = result
-                logging.info(f"[LLM photo one/many+barcode] Answer: {answer}")
-                if any(
-                    answer.lower().startswith(x) for x in ("one|", "many|", "unknown|")
-                ):
-                    return answer, usage
-            else:
-                answer = result
-                logging.info(f"[LLM photo one/many+barcode] Answer: {answer}")
-                if any(
-                    answer.lower().startswith(x) for x in ("one|", "many|", "unknown|")
-                ):
-                    return answer
-                logging.info(f"[Photo LLM] Invalid answer '{answer}', retrying...")
+        for key_attempt in range(num_keys):
+            self.current_key_index = key_attempt
+            self.configure_api()
+            max_attempts = 2
+            for attempt in range(max_attempts):
+                result = self.get_response(img_data, return_usage=return_usage)
+                if not result or (return_usage and not result[0]):
+                    logging.info(
+                        f"[Photo LLM] Empty answer, retrying... (API key {key_attempt}, attempt {attempt+1})"
+                    )
+                    continue
+                if return_usage:
+                    answer, usage = result
+                    logging.info(f"[LLM photo one/many+barcode] Answer: {answer}")
+                    if any(
+                        answer.lower().startswith(x)
+                        for x in ("one|", "many|", "unknown|")
+                    ):
+                        return answer, usage
+                else:
+                    answer = result
+                    logging.info(f"[LLM photo one/many+barcode] Answer: {answer}")
+                    if any(
+                        answer.lower().startswith(x)
+                        for x in ("one|", "many|", "unknown|")
+                    ):
+                        return answer
+                    logging.info(f"[Photo LLM] Invalid answer '{answer}', retrying...")
+            logging.info(
+                f"[Photo LLM] Switching to next API key (index {key_attempt+1})"
+            )
 
         logging.warning(
-            "[Photo LLM] All attempts failed or only invalid answers found."
+            "[Photo LLM] All API keys and attempts failed or only invalid answers found."
         )
         if return_usage:
             return "unknown|unknown", {
