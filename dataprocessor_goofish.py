@@ -90,13 +90,13 @@ class GoofishParserPlaywrightAsync:
             and any("price--" in c for c in tag["class"])
         )
         price = price_tag.text.strip() if price_tag else "N/A"
-        # --- Парсинг описания ---
+        # --- Description parsing ---
         desc_tag = soup.find("span", class_="desc--GaIUKUQY")
         if desc_tag:
-            # Собрать весь текст, включая вложенные теги и переносы
+            # Collect all text, including nested tags and line breaks
             description = desc_tag.get_text(separator="\n", strip=True)
         else:
-            # Иногда описание может быть в других вложенных span внутри блока с этим классом
+            # Sometimes the description may be in other nested spans inside the block with this class
             main_div = soup.find("div", class_="main--Nu33bWl6")
             if main_div:
                 desc_spans = main_div.find_all("span", class_="desc--GaIUKUQY")
@@ -105,7 +105,7 @@ class GoofishParserPlaywrightAsync:
                         [s.get_text(separator=" ", strip=True) for s in desc_spans]
                     )
                 else:
-                    # fallback: собрать весь текст из main_div
+                    # fallback: collect all text from main_div
                     description = main_div.get_text(separator=" ", strip=True)
             else:
                 description = ""
@@ -190,11 +190,11 @@ def create_chrome_driver(user_agent=None, debug_port=None):
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--headless")
-    # генерируем случайный порт, если не передан
+    # Generate a random port if not provided
     if debug_port is None:
         debug_port = random.randint(9222, 9999)
     chrome_options.add_argument(f"--remote-debugging-port={debug_port}")
-    # user-data-dir на Google Диске
+    # user-data-dir on Google Drive
     base_dir = "/content/drive/MyDrive/chrome_user_data"
     os.makedirs(base_dir, exist_ok=True)
     temp_dir = os.path.join(base_dir, str(uuid.uuid4()))
@@ -215,7 +215,7 @@ def close_chrome_driver(driver):
         pass
     if temp_dir and os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
-    # Дать системе время освободить ресурсы
+    # Give the system time to release resources
     time.sleep(2)
 
 
@@ -313,7 +313,7 @@ class Processor(metaclass=RuntimeMeta):
 
     def save_product_links_to_csv(self, links, filename="product_links.csv"):
         """
-        Сохраняет список (img_src, href) в CSV-файл.
+        Saves a list of (img_src, href) to a CSV file.
         """
         import csv
 
@@ -351,7 +351,7 @@ class Processor(metaclass=RuntimeMeta):
 
     def collect_product_links_selenium(self, driver, max_steps=5, max_links=100):
         """
-        Собирает ссылки на карточки товаров с помощью Selenium, эмулируя клики по пагинации.
+        Collects product card links using Selenium, simulating pagination clicks.
         """
         driver.execute_cdp_cmd(
             "Page.addScriptToEvaluateOnNewDocument",
@@ -384,7 +384,7 @@ class Processor(metaclass=RuntimeMeta):
         except Exception as e:
             print("Popup not found or already closed")
 
-        # Кликаем по кнопке поиска
+        # Click the search button
         max_search_attempts = 3
         for attempt in range(max_search_attempts):
             try:
@@ -402,7 +402,7 @@ class Processor(metaclass=RuntimeMeta):
                 ).click().perform()
                 human_sleep(2.5, 5.5)
                 print("Search performed")
-                break  # если успешно, выходим из цикла
+                break  # success, exit loop
             except Exception as e:
                 print(
                     f"Search button not found or not clicked (attempt {attempt+1}):", e
@@ -412,7 +412,7 @@ class Processor(metaclass=RuntimeMeta):
             print("Failed to click search after several attempts.")
 
         for page in range(1, max_steps + 1):
-            # Случайный скролл вверх/вниз
+            # Random scroll up/down
             driver.execute_script(f"window.scrollTo(0, {random.randint(0, 500)});")
             human_sleep(0.7, 1.7)
             soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -427,7 +427,7 @@ class Processor(metaclass=RuntimeMeta):
                 if len(collected) >= max_links:
                     return collected
 
-                # Логируем все найденные кнопки пагинации
+                # Log all found pagination buttons
                 all_buttons = driver.find_elements(
                     By.XPATH,
                     '//button[starts-with(@class, "search-pagination-arrow-container--")]',
@@ -435,23 +435,23 @@ class Processor(metaclass=RuntimeMeta):
 
             if page == max_steps:
                 break
-            # Скроллим вниз перед переходом
+            # Scroll down before switching page
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             human_sleep(1.5, 3.5)
             try:
                 wait = WebDriverWait(driver, 15)
-                # Находим все кнопки пагинации
+                # Find all pagination buttons
                 all_buttons = driver.find_elements(
                     By.XPATH,
                     '//button[starts-with(@class, "search-pagination-arrow-container--")]',
                 )
                 if len(all_buttons) < 2:
                     logging.warning(
-                        f"Ожидалось минимум 2 кнопки пагинации, найдено {len(all_buttons)}"
+                        f"Expected at least 2 pagination buttons, found {len(all_buttons)}"
                     )
                     break
-                next_arrow_btn = all_buttons[1]  # Вторая кнопка — обычно 'вперёд'
-                # Пробуем найти внутренний div с классом 'search-pagination-arrow-right--'
+                next_arrow_btn = all_buttons[1]  # The second button is usually 'next'
+                # Try to find the inner div with class 'search-pagination-arrow-right--'
                 try:
                     next_arrow_div = next_arrow_btn.find_element(
                         By.XPATH,
@@ -459,12 +459,10 @@ class Processor(metaclass=RuntimeMeta):
                     )
                     driver.execute_script("arguments[0].click();", next_arrow_div)
                     logging.info(
-                        f"Клик по div внутри второй кнопки успешен, страница {page+1}"
+                        f"Click on div inside second button successful, page {page+1}"
                     )
                 except Exception as e:
-                    logging.warning(
-                        f"Не удалось кликнуть по div внутри второй кнопки: {e}"
-                    )
+                    logging.warning(f"Failed to click div inside second button: {e}")
                     driver.execute_script("arguments[0].click();", next_arrow_btn)
                 human_sleep(2.5, 5.5)
             except Exception as e:
@@ -475,7 +473,7 @@ class Processor(metaclass=RuntimeMeta):
 
     def parse_big_images_from_slider_selenium(self, driver, page_url):
         """
-        Собирает все большие картинки из слайдера карточки товара goofish через Selenium.
+        Collects all large images from the goofish product card slider using Selenium.
         """
         driver.get(page_url)
         time.sleep(3)
@@ -510,14 +508,14 @@ class Processor(metaclass=RuntimeMeta):
 
     def load_product_info(self, page_url):
         """
-        Парсит цену товара с карточки goofish.
+        Parses the product price from the goofish product card.
         """
         try:
             headers = random.choice(self.headers_list)
             response = self.session.get(page_url, headers=headers, timeout=10)
             response.raise_for_status()
             soup = BeautifulSoup(response.content, "html.parser")
-            # Ищем любой тег с классом, содержащим "price--"
+            # Search for any tag with a class containing "price--"
             price_tag = soup.find(
                 lambda tag: tag.has_attr("class")
                 and any("price--" in c for c in tag["class"])
@@ -542,7 +540,7 @@ class Processor(metaclass=RuntimeMeta):
 
     def create_persistent_driver(self, user_agent=None, debug_port=None):
         """
-        Создает persistent Selenium Chrome driver для всех операций.
+        Creates a persistent Selenium Chrome driver for all operations.
         """
         if user_agent is None:
             user_agent = random.choice(self.user_agents)
@@ -554,11 +552,11 @@ class Processor(metaclass=RuntimeMeta):
 
     def process_encoded_data(self, encoded_data, result):
         """
-        Обрабатывает закодированные данные товара и добавляет их в результат.
+        Processes the encoded product data and adds it to the result.
 
         Args:
-            encoded_data (dict): Закодированные данные о товаре.
-            result (dict): Результирующий словарь для записи в Excel.
+            encoded_data (dict): Encoded product data.
+            result (dict): Resulting dictionary for writing to Excel.
 
         Returns:
             None

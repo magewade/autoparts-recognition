@@ -647,6 +647,12 @@ if __name__ == "__main__":
         default="gemini-2.5-flash-lite",
         help="Gemini model for description LLM",
     )
+    cli_parser.add_argument(
+        "--one-many-model",
+        type=str,
+        default="gemini-2.0-flash-lite",
+        help="Gemini model for one/many+barcode LLM (images)",
+    )
     cli_args = cli_parser.parse_args()
 
     # Запуск пайплайна
