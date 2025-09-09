@@ -8,7 +8,9 @@ import io
 from pathlib import Path
 
 
-# Новый промпт для одновременного определения one/many и наличия наклейки с баркодом и брендом
+"""
+Prompt for simultaneous detection of one/many and presence of a barcode+brand label on the part.
+"""
 PHOTO_ONE_MANY_BARCODE_PROMPT = (
     "You are analyzing a product photo. Your task is to determine ONLY the physical quantity of unique physical car items (not numbers, not labels, not packaging, not text, not boxes, not backgrounds). "
     "If there is exactly one unique physical car item visible (even if there are many numbers or labels), output 'one'. "
@@ -21,7 +23,11 @@ PHOTO_ONE_MANY_BARCODE_PROMPT = (
 )
 
 
-# Универсальная функция для приведения usage к dict
+"""
+Universal function to convert usage to dict.
+"""
+
+
 def usage_to_dict(usage):
     if usage is None:
         return {
@@ -54,10 +60,10 @@ def process_images_one_many_and_barcode_label(
     image_paths, api_keys, model_name="gemini-2.0-flash-lite"
 ):
     """
-    Для списка image_paths:
-    - Для каждой картинки вызывает LLM с новым промптом.
-    - Если хотя бы на одной many — прерывает обработку и возвращает накопленный список (до many включительно).
-    - Возвращает список строк вида one|True, one|False, many|True,many|False и т.д.
+    For a list of image_paths:
+    - For each image, calls the LLM with the prompt.
+    - If at least one result is 'many', stops processing and returns the accumulated list (up to and including the first 'many').
+    - Returns a list of strings like one|True, one|False, many|True, many|False, etc.
     """
     model = GeminiPhotoOneManyBarcodeInference(api_keys, model_name=model_name)
     predictions = []
@@ -81,7 +87,11 @@ def process_images_one_many_and_barcode_label(
     return predictions, token_stats
 
 
-# --- Класс-инференс для работы с промптом one|many + barcode ---
+"""
+Inference class for working with the one|many + barcode prompt.
+"""
+
+
 class GeminiPhotoOneManyBarcodeInference:
     def __init__(self, api_keys, model_name="gemini-2.0-flash-lite"):
         self.api_keys = api_keys
@@ -228,12 +238,12 @@ class GeminiPhotoOneManyBarcodeInference:
                     return answer, usage
             else:
                 answer = result
-                logging.info(f"[LLM photo one/many+barcode] Ответ: {answer}")
+                logging.info(f"[LLM photo one/many+barcode] Answer: {answer}")
                 if any(
                     answer.lower().startswith(x) for x in ("one|", "many|", "unknown|")
                 ):
                     return answer
-            logging.info(f"[Photo LLM] Invalid answer '{answer}', retrying...")
+                logging.info(f"[Photo LLM] Invalid answer '{answer}', retrying...")
 
         logging.warning(
             "[Photo LLM] All attempts failed or only invalid answers found."
