@@ -5,6 +5,7 @@ import time
 import logging
 import argparse
 import pandas as pd
+import re
 
 from config import Config
 from gemini_model import GeminiInference
@@ -532,7 +533,18 @@ def run_full_pipeline(cli_args):
                     else (gemini(found_link), None)
                 )
                 if usage and isinstance(usage, dict):
-                    usage_str = f"prompt_token_count: {usage.get('prompt_token_count', 'None')} candidates_token_count: {usage.get('candidates_token_count', 'None')} total_token_count: {usage.get('total_token_count', 'None')}"
+                    if "_pb" in usage:
+                        import re
+
+                        s = str(usage["_pb"])
+
+                        def extract(key):
+                            m = re.search(rf"{key}: ?(\\d+)", s)
+                            return m.group(1) if m else "None"
+
+                        usage_str = f"prompt_token_count: {extract('prompt_token_count')} candidates_token_count: {extract('candidates_token_count')} total_token_count: {extract('total_token_count')}"
+                    else:
+                        usage_str = f"prompt_token_count: {usage.get('prompt_token_count', 'None')} candidates_token_count: {usage.get('candidates_token_count', 'None')} total_token_count: {usage.get('total_token_count', 'None')}"
             except Exception as e:
                 logging.warning(f"[GeminiInference] Ошибка для {found_link}: {e}")
                 number = "ERROR"
@@ -743,46 +755,29 @@ if __name__ == "__main__":
         except Exception as e:
             logging.warning(f"[USAGE] Не удалось прочитать {usage_file}: {e}")
     if stage_totals:
-        logging.info("\n==== TOKEN USAGE BY STAGE ====")
-        for stage, (prompt_sum, candidates_sum, total_sum) in stage_totals.items():
-            logging.info(
-                f"{stage}: prompt={int(prompt_sum)}, candidates={int(candidates_sum)}, total={int(total_sum)}"
-            )
-        logging.info("=============================")
-    # --- Подсчет total_token_count из usage файлов (_pb) с красивым выводом ---
-    import re
+        # --- Только подсчет total_token_count из usage файлов (_pb) с красивым выводом ---
+        usage_labels = {
+            "description": "Description",
+            "image": "Images",
+            "number": "Numbers",
+        }
+        stage_totals_simple = {k: 0 for k in usage_labels.values()}
+        for usage_file in usage_files:
+            try:
+                df = pd.read_csv(usage_file)
+                if "_pb" in df.columns:
 
-    usage_labels = {
-        "description": "описание",
-        "image": "картинки",
-        "number": "номер",
-    }
-    for usage_file in usage_files:
-        try:
-            df = pd.read_csv(usage_file)
-            if "_pb" in df.columns:
+                    def extract_total_token_count(s):
+                        m = re.search(r"total_token_count:\s*(\\d+)", str(s))
+                        return int(m.group(1)) if m else 0
 
-                def extract_total_token_count(s):
-                    m = re.search(r"total_token_count:\s*(\\d+)", str(s))
-                    return int(m.group(1)) if m else 0
-
-                total = df["_pb"].apply(extract_total_token_count).sum()
-                # определяем тип файла для подписи
-                label = None
-                for k, v in usage_labels.items():
-                    if k in usage_file:
-                        label = v
-                        break
-                if not label:
-                    label = usage_file
-                logging.info(f"{label} - {total}")
-        except Exception as e:
-            logging.warning(
-                f"[USAGE] Не удалось посчитать total_token_count в {usage_file}: {e}"
-            )
-    if usage_files:
-        logging.info(f"\n==== TOTAL TOKEN USAGE ====")
-        logging.info(f"Prompt tokens: {int(total_prompt)}")
-        logging.info(f"Candidates tokens: {int(total_candidates)}")
-        logging.info(f"Total tokens: {int(total_tokens)}")
-        logging.info(f"==========================\n")
+                    total = df["_pb"].apply(extract_total_token_count).sum()
+                    for k, v in usage_labels.items():
+                        if k in usage_file:
+                            stage_totals_simple[v] += total
+            except Exception as e:
+                logging.warning(
+                    f"[USAGE] Не удалось посчитать total_token_count в {usage_file}: {e}"
+                )
+        for label in usage_labels.values():
+            logging.info(f"{label}: {stage_totals_simple[label]}")
