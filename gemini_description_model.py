@@ -143,7 +143,8 @@ class GeminiDescriptionInference:
     def switch_api_key(self):
         self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
         self.configure_api()
-        logging.info(f"[Desc LLM] Switched to API key index: {self.current_key_index}")
+
+    # logging removed: switched to API key index
 
     def __call__(self, desc, return_usage=False):
         prompt = DESCRIPTION_MODEL_PROMPT + f"Description: {desc}"
@@ -155,9 +156,7 @@ class GeminiDescriptionInference:
             key_attempt = (self.last_successful_key_index + offset) % num_keys
             self.current_key_index = key_attempt
             self.configure_api()
-            logging.info(
-                f"[Desc LLM] Switched to API key index: {self.current_key_index}"
-            )
+            # logging removed: switched to API key index
             for attempt in range(max_retries):
                 try:
                     response = self.model.generate_content(prompt)

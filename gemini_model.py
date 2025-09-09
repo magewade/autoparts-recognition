@@ -182,7 +182,8 @@ class GeminiInference:
     def switch_api_key(self):
         self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
         self.configure_api()
-        logging.info(f"Switched to API key index: {self.current_key_index}")
+
+    # logging removed: switched to API key index
 
     def create_validator_model(self, model_name):
         genai.configure(api_key=self.api_keys[self.current_key_index])
@@ -359,9 +360,7 @@ class GeminiInference:
             key_attempt = (self.last_successful_key_index + offset) % num_keys
             self.current_key_index = key_attempt
             self.configure_api()
-            logging.info(
-                f"[GeminiInference] Switched to API key index: {self.current_key_index}"
-            )
+            # logging removed: switched to API key index
             for attempt in range(max_retries):
                 try:
                     response = self.model.generate_content(prompt)
