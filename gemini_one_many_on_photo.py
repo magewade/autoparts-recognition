@@ -268,9 +268,6 @@ class GeminiPhotoOneManyBarcodeInference:
         for offset in range(num_keys):
             key_attempt = (self.current_key_index + offset) % num_keys
             self.current_key_index = key_attempt
-            logging.info(
-                f"[Photo LLM] Using API key index: {self.current_key_index}, key: {self.api_keys[self.current_key_index][:8]}...{self.api_keys[self.current_key_index][-4:]}"
-            )
             self.configure_api()
             result = self.get_response(img_data, return_usage=return_usage)
             if not result or (return_usage and not result[0]):
