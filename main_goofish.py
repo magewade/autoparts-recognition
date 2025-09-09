@@ -6,6 +6,11 @@ import logging
 import argparse
 import pandas as pd
 import re
+import pandas as pd
+import re
+import io
+from pathlib import Path
+
 
 from config import Config
 from gemini_model import GeminiInference
@@ -679,3 +684,92 @@ if __name__ == "__main__":
         f"\nВсего: {total_time/60:.2f} мин"
         f"\n====================="
     )
+
+    # === TOKEN USAGE SUMMARY ===
+
+    stage_files = [
+        ("description", "products_description_usage.csv"),
+        ("image", "products_image_usage.csv"),
+        ("number", "products_number_usage.csv"),
+    ]
+    pattern = re.compile(r"total_token_count\s*:\s*(\d+)", flags=re.IGNORECASE)
+    results = []
+    for stage, fp in stage_files:
+        p = Path(fp)
+        if not p.exists():
+            results.append(
+                {
+                    "stage": stage,
+                    "total_token_count_sum": None,
+                    "error": "file not found",
+                }
+            )
+            continue
+        df = None
+        for sep in [",", "\t", ";", "|"]:
+            try:
+                tmp = pd.read_csv(p, sep=sep, engine="python", dtype=str)
+                if any(c.strip().lower() == "_pb" for c in tmp.columns) or any(
+                    "_pb" in c.lower() for c in tmp.columns
+                ):
+                    df = tmp
+                    break
+            except Exception:
+                df = None
+        if df is None:
+            text = p.read_text(encoding="utf-8", errors="ignore")
+            lines = text.splitlines()
+            header_idx = None
+            for i, ln in enumerate(lines):
+                if "_pb" in ln:
+                    header_idx = i
+                    break
+            if header_idx is not None:
+                content = "\n".join(lines[header_idx:])
+                try:
+                    df = pd.read_csv(io.StringIO(content), engine="python", dtype=str)
+                except Exception:
+                    df = pd.read_csv(
+                        io.StringIO(text),
+                        header=None,
+                        names=["_pb"],
+                        engine="python",
+                        dtype=str,
+                    )
+            else:
+                df = pd.read_csv(
+                    p, header=None, names=["_pb"], engine="python", dtype=str
+                )
+        pb_col = next((c for c in df.columns if c.strip().lower() == "_pb"), None)
+        if pb_col is None:
+            pb_col = next((c for c in df.columns if "_pb" in c.lower()), None)
+        if pb_col is None and df.shape[1] == 1:
+            pb_col = df.columns[0]
+        if pb_col is None:
+            results.append(
+                {
+                    "stage": stage,
+                    "total_token_count_sum": None,
+                    "error": "_pb column not found",
+                }
+            )
+            continue
+        total_sum = 0
+        for cell in df[pb_col].astype(str).fillna(""):
+            matches = pattern.findall(cell)
+            if matches:
+                total_sum += sum(int(m) for m in matches)
+        results.append({"stage": stage, "total_token_count_sum": int(total_sum)})
+    res_df = pd.DataFrame(results).set_index("stage")
+    stage_labels = {
+        "description": "Description",
+        "image": "Images",
+        "number": "Numbers",
+    }
+    res_df_disp = res_df.copy()
+    res_df_disp.index = [stage_labels.get(idx, idx) for idx in res_df_disp.index]
+    print("\n==== TOKEN USAGE SUMMARY ====")
+    print(
+        res_df_disp.rename(columns={"total_token_count_sum": "Total token count sum"})
+    )
+    print("============================\n")

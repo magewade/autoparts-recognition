@@ -94,10 +94,6 @@ class GeminiInference:
 
         self.api_keys = api_keys
         self.current_key_index = 0
-        # Всегда используем только DEFAULT_PROMPT
-        logging.info(
-            f"[GeminiInference] Description info for prompt: brand='{car_brand}'"
-        )
         prompt_filled = DEFAULT_PROMPT.format(
             car_brand=car_brand if car_brand is not None else "None"
         )
