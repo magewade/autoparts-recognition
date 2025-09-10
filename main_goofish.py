@@ -214,6 +214,8 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
                         logging.warning(
                             f"[run_inference] Local image not found: {img_path}"
                         )
+            from gemini_model import extract_clean_answer
+
             for attempt in range(2):
                 try:
                     if img_data is not None:
@@ -226,7 +228,7 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
                 except Exception as e:
                     logging.warning(f"LLM error (attempt {attempt+1}): {e}")
                     llm_pred = ""
-            llm_predictions[i] = llm_pred
+            llm_predictions[i] = extract_clean_answer(llm_pred)
             if (i + 1) % chunk_size == 0:
                 temp_df = df.copy()
                 temp_df["predicted_image"] = predicted_images

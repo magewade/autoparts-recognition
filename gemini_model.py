@@ -86,6 +86,16 @@ def usage_to_dict(usage):
         }
 
 
+def extract_clean_answer(text):
+    import re
+
+    match = re.search(r"<START>(.*?)<END>", text, re.DOTALL)
+    if match:
+        return match.group(1).strip().replace("\n", " ")
+    return text.strip().replace("\n", " ")
+
+
+
 class GeminiInference:
 
     def __init__(
@@ -98,7 +108,6 @@ class GeminiInference:
         prompt_override=None,
     ):
         self.model_name = model_name
-        logging.info(f"[GeminiInference] Using model: {self.model_name}")
 
         self.car_brand = car_brand
         self.desc_numbers = desc_numbers
@@ -264,7 +273,15 @@ class GeminiInference:
                 self.message_history.append({"role": "model", "parts": [response.text]})
 
                 # usage_metadata может быть на response или response.result
-                logging.info(f"[GeminiInference] Model response: {response.text}")
+                # Извлекаем только содержимое между <START> и <END> для лога
+                import re
+
+                match = re.search(r"<START>(.*?)<END>", response.text, re.DOTALL)
+                if match:
+                    answer_log = match.group(1).strip().replace("\n", " ")
+                else:
+                    answer_log = response.text.strip().replace("\n", " ")
+                logging.info(f"[GeminiInference] Model answer: {answer_log}")
                 if hasattr(response, "result") and hasattr(
                     response.result, "usage_metadata"
                 ):
