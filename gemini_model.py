@@ -115,18 +115,26 @@ class GeminiInference:
             "top_k": 32,
             "max_output_tokens": 80000,
         }
-        safety_settings = [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
-            {
-                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                "threshold": "BLOCK_ONLY_HIGH",
-            },
-            {
-                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                "threshold": "BLOCK_ONLY_HIGH",
-            },
-        ]
+        safety_settings = (
+            [
+                {
+                    "category": "HARM_CATEGORY_HARASSMENT",
+                    "threshold": "BLOCK_NONE",
+                },
+                {
+                    "category": "HARM_CATEGORY_HATE_SPEECH",
+                    "threshold": "BLOCK_NONE",
+                },
+                {
+                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "threshold": "BLOCK_NONE",
+                },
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_NONE",
+                },
+            ],
+        )
 
         # Всегда используем только DEFAULT_PROMPT
 
@@ -162,19 +170,19 @@ class GeminiInference:
             safety_settings=[
                 {
                     "category": "HARM_CATEGORY_HARASSMENT",
-                    "threshold": "BLOCK_ONLY_HIGH",
+                    "threshold": "BLOCK_NONE",
                 },
                 {
                     "category": "HARM_CATEGORY_HATE_SPEECH",
-                    "threshold": "BLOCK_ONLY_HIGH",
+                    "threshold": "BLOCK_NONE",
                 },
                 {
                     "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                    "threshold": "BLOCK_ONLY_HIGH",
+                    "threshold": "BLOCK_NONE",
                 },
                 {
                     "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                    "threshold": "BLOCK_ONLY_HIGH",
+                    "threshold": "BLOCK_NONE",
                 },
             ],
             system_instruction=DEFAULT_PROMPT,
@@ -278,7 +286,6 @@ class GeminiInference:
 
         logging.error("Max retries reached. Unable to get a response.")
         raise Exception("Max retries reached. Unable to get a response.")
-
 
     def extract_number(self, response):
         number = response.split("<START>")[-1].split("<END>")[0].strip()
