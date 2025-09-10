@@ -234,11 +234,6 @@ class GeminiInference:
     def get_response(self, img_data, retry=False, return_usage=False):
         max_retries = 10
         base_delay = 5
-        # Логируем отправляемый промпт
-        short_prompt = self.system_prompt.replace("\n", " ")
-        logging.info(
-            f"[GeminiInference] Prompt to model (truncated): {short_prompt} ..."
-        )
 
         for attempt in range(max_retries):
             try:
@@ -269,7 +264,7 @@ class GeminiInference:
                 self.message_history.append({"role": "model", "parts": [response.text]})
 
                 # usage_metadata может быть на response или response.result
-                usage = None
+                logging.info(f"[GeminiInference] Model response: {response.text}")
                 if hasattr(response, "result") and hasattr(
                     response.result, "usage_metadata"
                 ):
