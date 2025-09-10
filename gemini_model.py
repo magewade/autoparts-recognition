@@ -113,7 +113,7 @@ class GeminiInference:
             "temperature": 1,
             "top_p": 1,
             "top_k": 32,
-            "max_output_tokens": 8192,
+            "max_output_tokens": 20000,
         }
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
@@ -157,7 +157,7 @@ class GeminiInference:
                 "temperature": 0,
                 "top_p": 1,
                 "top_k": 1,
-                "max_output_tokens": 8192,
+                "max_output_tokens": 20000,
             },
             safety_settings=[
                 {
@@ -279,21 +279,6 @@ class GeminiInference:
         logging.error("Max retries reached. Unable to get a response.")
         raise Exception("Max retries reached. Unable to get a response.")
 
-    def format_part_number(self, number):
-        if self.car_brand == "audi" and re.match(
-            r"^[A-Z0-9]{3}[0-9]{3}[0-9]{3,5}[A-Z]?$",
-            number.replace(" ", "").replace("-", ""),
-        ):
-            number = number.replace("-", "").replace(" ", "")
-
-            formatted_number = f"{number[:3]} {number[3:6]} {number[6:9]}"
-
-            if len(number) > 9:
-                formatted_number += f" {number[9:]}"
-
-            return formatted_number.strip()
-        else:
-            return number
 
     def extract_number(self, response):
         number = response.split("<START>")[-1].split("<END>")[0].strip()
