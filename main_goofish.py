@@ -184,9 +184,42 @@ def run_inference(parsed_csv="parsed_products.csv", output_csv="final_products.c
                 desc_one_many=desc_one_many,
                 prompt_override=args.prompt_override,
             )
+            # --- Передаем бинарные данные изображения в модель ---
+            img_path = predicted_images[i]
+            img_data = None
+            if img_path and isinstance(img_path, str):
+                if img_path.startswith("http"):
+                    import requests
+                    import io
+
+                    try:
+                        resp = requests.get(img_path, stream=True, timeout=15)
+                        if resp.status_code == 200 and resp.content:
+                            img_data = io.BytesIO(resp.content)
+                        else:
+                            logging.warning(
+                                f"[run_inference] Failed to download image: {img_path}"
+                            )
+                    except Exception as e:
+                        logging.warning(
+                            f"[run_inference] Exception downloading image {img_path}: {e}"
+                        )
+                else:
+                    from pathlib import Path
+
+                    img_file = Path(img_path)
+                    if img_file.exists():
+                        img_data = img_file
+                    else:
+                        logging.warning(
+                            f"[run_inference] Local image not found: {img_path}"
+                        )
             for attempt in range(2):
                 try:
-                    llm_pred = llm_row(predicted_images[i])
+                    if img_data is not None:
+                        llm_pred = llm_row.get_response(img_data)
+                    else:
+                        llm_pred = llm_row(img_path)  # fallback: только ссылка
                     if not llm_pred:
                         raise ValueError(f"Empty LLM response: {llm_pred}")
                     break  # success
@@ -580,6 +613,24 @@ def run_full_pipeline(cli_args):
                 break
         barcode_image_links.append(found_link if found_link else "")
         usage_str = "prompt_token_count: None candidates_token_count: None total_token_count: None"
+
+        # --- Извлекаем brand, numbers, one/many из description_model_guess или других колонок ---
+        desc_brand, desc_numbers, desc_one_many = None, None, None
+        guess = str(row.get("description_model_guess", "")).strip()
+        if guess and guess.upper() != "NONE":
+            parts = [p.strip() for p in guess.split("|")]
+            if len(parts) == 3:
+                desc_brand, desc_numbers, desc_one_many = parts
+        if not desc_brand:
+            desc_brand = row.get("brand") or row.get("car_brand") or cli_args.car_brand
+        # Создаём GeminiInference с подстановкой значений
+        gemini = GeminiInference(
+            api_keys=cli_args.api_keys,
+            model_name=cli_args.gemini_api_model,
+            car_brand=desc_brand,
+            desc_numbers=desc_numbers,
+            desc_one_many=desc_one_many,
+        )
         if found_link:
             try:
                 number, usage = (
