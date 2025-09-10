@@ -87,33 +87,30 @@ def usage_to_dict(usage):
 
 
 class GeminiInference:
+
     def __init__(
         self,
         api_keys,
         model_name="gemini-2.5-flash",
         car_brand=None,
+        desc_numbers=None,
+        desc_one_many=None,
         prompt_override=None,
     ):
         self.model_name = model_name
         logging.info(f"[GeminiInference] Using model: {self.model_name}")
 
         self.car_brand = car_brand
+        self.desc_numbers = desc_numbers
+        self.desc_one_many = desc_one_many
 
         self.api_keys = api_keys
         self.current_key_index = 0
         self.last_successful_key_index = 0
         prompt_filled = DEFAULT_PROMPT.format(
             desc_brand=car_brand if car_brand is not None else "None",
-            desc_numbers=(
-                getattr(self, "desc_numbers", None)
-                if hasattr(self, "desc_numbers")
-                else None
-            ),
-            desc_one_many=(
-                getattr(self, "desc_one_many", None)
-                if hasattr(self, "desc_one_many")
-                else None
-            ),
+            desc_numbers=desc_numbers if desc_numbers is not None else "None",
+            desc_one_many=desc_one_many if desc_one_many is not None else "None",
         )
         if prompt_override:
             self.system_prompt = prompt_override.strip() + "\n\n" + prompt_filled
@@ -239,9 +236,9 @@ class GeminiInference:
         base_delay = 5
         # Логируем отправляемый промпт
         short_prompt = self.system_prompt[:300].replace("\n", " ")
-        logging.info(
-            f"[GeminiInference] Prompt to model (truncated): {short_prompt} ..."
-        )
+        end_prompt = self.system_prompt[-300:].replace("\n", " ")
+        logging.info(f"[GeminiInference] Prompt to model (truncated): {short_prompt} ...")
+        logging.info(f"[GeminiInference] Prompt END (last 300 chars): ...{end_prompt}")
 
         for attempt in range(max_retries):
             try:
@@ -385,9 +382,11 @@ class GeminiInference:
 
         prompt = self.system_prompt + f"\nImage: {image_path}"
         # Логируем отправляемый промпт (только первые 300 символов)
-        short_prompt = prompt[:300].replace('\n', ' ')
-        logging.info(f"[GeminiInference] Prompt to model (truncated, with image link): {short_prompt} ...")
-        
+        short_prompt = prompt[:300].replace("\n", " ")
+        logging.info(
+            f"[GeminiInference] Prompt to model (truncated, with image link): {short_prompt} ..."
+        )
+
         num_keys = len(self.api_keys)
         max_retries = 5
         for offset in range(num_keys):
