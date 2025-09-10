@@ -50,9 +50,9 @@ Instructions:
 | Great Wall / Haval (China)| 3605… / 36051… codes  | 3605100-EG01, 3605100-K00, 3605100XKZ16A      |
 
 Output strictly in this format (always in English, always 3 fields, always separated by |):
-[Brand/Model Guess] | [Model/Part Number(s)] | [one/many]
+<START>[Brand/Model Guess] | [Model/Part Number(s)] | [one/many]<END>
 
-If you don't know a value, write None. Do not output anything else except the required 3 fields in the specified format. Always answer in English.
+If you don't know a value, write None. Do not output anything else except the required 3 fields in the specified format. Always answer in English. Always wrap your answer in <START> and <END> markers.
 """
 
 
