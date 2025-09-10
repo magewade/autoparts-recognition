@@ -526,6 +526,7 @@ def run_full_pipeline(cli_args):
         logging.info("products_one_image.csv has been created")
     else:
         logging.info("products_one_image.csv found, skipping image inference")
+        df_one_desc = pd.read_csv("products_one_image.csv")
 
     # 6. Filter many/one by images, add many to products_many.csv
     def has_many(preds):
