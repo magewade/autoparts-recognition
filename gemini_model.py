@@ -20,7 +20,9 @@ DEFAULT_PROMPT = """
 You are an expert at extracting automotive part/model numbers from images. You are given the following from a previous description analysis:
 
 [Description LLM output]
-Brand | Numbers | One_or_many: {car_brand}
+Brand: {desc_brand}
+Numbers: {desc_numbers}
+One_or_many: {desc_one_many}
 
 Instructions:
 - Use all info above to help analyze the image. If a field is missing or 'None', try to fill it from the image.
@@ -50,7 +52,7 @@ Instructions:
 | Great Wall / Haval (China)| 3605… / 36051… codes  | 3605100-EG01, 3605100-K00, 3605100XKZ16A      |
 
 Output strictly in this format (always in English, always 3 fields, always separated by |):
-<START>[Brand/Model Guess] | [Model/Part Number(s)] | [one/many]<END>
+Brand/Model Guess | Model/Part Number(s) | one/many
 
 If you don't know a value, write None. Do not output anything else except the required 3 fields in the specified format. Always answer in English. Always wrap your answer in <START> and <END> markers.
 """
@@ -101,7 +103,17 @@ class GeminiInference:
         self.current_key_index = 0
         self.last_successful_key_index = 0
         prompt_filled = DEFAULT_PROMPT.format(
-            car_brand=car_brand if car_brand is not None else "None"
+            desc_brand=car_brand if car_brand is not None else "None",
+            desc_numbers=(
+                getattr(self, "desc_numbers", None)
+                if hasattr(self, "desc_numbers")
+                else None
+            ),
+            desc_one_many=(
+                getattr(self, "desc_one_many", None)
+                if hasattr(self, "desc_one_many")
+                else None
+            ),
         )
         if prompt_override:
             self.system_prompt = prompt_override.strip() + "\n\n" + prompt_filled
@@ -113,26 +125,26 @@ class GeminiInference:
             "temperature": 1,
             "top_p": 1,
             "top_k": 32,
-            "max_output_tokens": 80000,
+            "max_output_tokens": 20000,
         }
         safety_settings = [
-                {
-                    "category": "HARM_CATEGORY_HARASSMENT",
-                    "threshold": "BLOCK_ONLY_HIGH",
-                },
-                {
-                    "category": "HARM_CATEGORY_HATE_SPEECH",
-                    "threshold": "BLOCK_ONLY_HIGH",
-                },
-                {
-                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                    "threshold": "BLOCK_ONLY_HIGH",
-                },
-                {
-                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                    "threshold": "BLOCK_ONLY_HIGH",
-                },
-            ]
+            {
+                "category": "HARM_CATEGORY_HARASSMENT",
+                "threshold": "BLOCK_ONLY_HIGH",
+            },
+            {
+                "category": "HARM_CATEGORY_HATE_SPEECH",
+                "threshold": "BLOCK_ONLY_HIGH",
+            },
+            {
+                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "threshold": "BLOCK_ONLY_HIGH",
+            },
+            {
+                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "threshold": "BLOCK_ONLY_HIGH",
+            },
+        ]
         # Всегда используем только DEFAULT_PROMPT
 
         self.model = genai.GenerativeModel(
@@ -162,7 +174,7 @@ class GeminiInference:
                 "temperature": 0,
                 "top_p": 1,
                 "top_k": 1,
-                "max_output_tokens": 80000,
+                "max_output_tokens": 20000,
             },
             safety_settings=[
                 {
@@ -225,6 +237,11 @@ class GeminiInference:
     def get_response(self, img_data, retry=False, return_usage=False):
         max_retries = 10
         base_delay = 5
+        # Логируем отправляемый промпт
+        short_prompt = self.system_prompt[:300].replace("\n", " ")
+        logging.info(
+            f"[GeminiInference] Prompt to model (truncated): {short_prompt} ..."
+        )
 
         for attempt in range(max_retries):
             try:
@@ -367,6 +384,9 @@ class GeminiInference:
             img_data = img
 
         prompt = DEFAULT_PROMPT + f"Image: {image_path}"
+        # Логируем отправляемый промпт (только первые 300 символов)
+        short_prompt = prompt[:300].replace('\n', ' ')
+        logging.info(f"[GeminiInference] Prompt to model (truncated, with image link): {short_prompt} ...")
         num_keys = len(self.api_keys)
         max_retries = 5
         for offset in range(num_keys):
