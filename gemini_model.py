@@ -383,10 +383,11 @@ class GeminiInference:
             )
             img_data = img
 
-        prompt = DEFAULT_PROMPT + f"Image: {image_path}"
+        prompt = self.system_prompt + f"\nImage: {image_path}"
         # Логируем отправляемый промпт (только первые 300 символов)
         short_prompt = prompt[:300].replace('\n', ' ')
         logging.info(f"[GeminiInference] Prompt to model (truncated, with image link): {short_prompt} ...")
+        
         num_keys = len(self.api_keys)
         max_retries = 5
         for offset in range(num_keys):
