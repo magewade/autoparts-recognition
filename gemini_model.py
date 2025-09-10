@@ -235,10 +235,8 @@ class GeminiInference:
         max_retries = 10
         base_delay = 5
         # Логируем отправляемый промпт
-        short_prompt = self.system_prompt[:300].replace("\n", " ")
-        end_prompt = self.system_prompt[-300:].replace("\n", " ")
+        short_prompt = self.system_prompt.replace("\n", " ")
         logging.info(f"[GeminiInference] Prompt to model (truncated): {short_prompt} ...")
-        logging.info(f"[GeminiInference] Prompt END (last 300 chars): ...{end_prompt}")
 
         for attempt in range(max_retries):
             try:
