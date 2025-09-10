@@ -157,7 +157,7 @@ class GeminiInference:
                 "temperature": 0,
                 "top_p": 1,
                 "top_k": 1,
-                "max_output_tokens": 6000,
+                "max_output_tokens": 8192,
             },
             safety_settings=[
                 {
@@ -349,12 +349,32 @@ class GeminiInference:
 
         if image_path.startswith("http"):
             headers = {"User-Agent": "Mozilla/5.0 (compatible; autoparts-bot/1.0)"}
-            response = requests.get(image_path, stream=True, headers=headers)
-            img_data = io.BytesIO(response.content)
+            try:
+                response = requests.get(
+                    image_path, stream=True, headers=headers, timeout=15
+                )
+                logging.info(
+                    f"[GeminiInference] Downloading image from URL: {image_path} | HTTP status: {response.status_code} | Size: {len(response.content)} bytes"
+                )
+                if response.status_code != 200 or not response.content:
+                    logging.warning(
+                        f"[GeminiInference] Failed to download image or image is empty: {image_path}"
+                    )
+                img_data = io.BytesIO(response.content)
+            except Exception as e:
+                logging.error(
+                    f"[GeminiInference] Exception downloading image {image_path}: {e}"
+                )
+                raise
         else:
             img = Path(image_path)
             if not img.exists():
+                logging.error(f"[GeminiInference] Local image not found: {img}")
                 raise FileNotFoundError(f"Could not find image: {img}")
+            size = img.stat().st_size if img.exists() else 0
+            logging.info(
+                f"[GeminiInference] Using local image: {image_path} | Size: {size} bytes"
+            )
             img_data = img
 
         prompt = DEFAULT_PROMPT + f"Image: {image_path}"
