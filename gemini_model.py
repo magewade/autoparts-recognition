@@ -113,7 +113,7 @@ class GeminiInference:
             "temperature": 1,
             "top_p": 1,
             "top_k": 32,
-            "max_output_tokens": 20000,
+            "max_output_tokens": 80000,
         }
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
@@ -157,7 +157,7 @@ class GeminiInference:
                 "temperature": 0,
                 "top_p": 1,
                 "top_k": 1,
-                "max_output_tokens": 20000,
+                "max_output_tokens": 80000,
             },
             safety_settings=[
                 {
@@ -197,7 +197,7 @@ class GeminiInference:
             "temperature": 1,
             "top_p": 1,
             "top_k": 32,
-            "max_output_tokens": 8192,
+            "max_output_tokens": 20000,
         }
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
